@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>Email Templates Preview</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 40px; }
+        h1 { color: #333; }
+        ul { list-style-type: none; padding: 0; }
+        li { margin: 10px 0; }
+        a {
+            display: inline-block;
+            padding: 10px 20px;
+            background: #007bff;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+        }
+        a:hover { background: #0056b3; }
+    </style>
+</head>
+<body>
+<h1>  Aperçu des Templates Email</h1>
+<p>Sélectionnez un template à prévisualiser :</p>
+<ul>
+    <li><a th:href="@{/preview/email/welcome}">Welcome Template</a></li>
+    <li><a th:href="@{/preview/email/welcome(prenom='John', numero='ADH-2024001')}">Welcome avec John</a></li>
+    <li><a th:href="@{/preview/email/password-reset}">Password Reset</a></li>
+    <li><a th:href="@{/preview/email/invoice}">Invoice/Facture</a></li>
+    <li><a th:href="@{/preview/email/notification}">Notification</a></li>
+</ul>
+
+<h2>Test avec paramètres</h2>
+<form action="/preview/email/welcome" method="get">
+    <label>Prénom: <input type="text" name="prenom" value="Franky"></label><br>
+    <label>Numéro: <input type="text" name="numero" value="ADH-2026001"></label><br>
+    <label>Lien: <input type="text" name="link" value="https://example.com/activate"></label><br>
+    <button type="submit">Voir Preview</button>
+</form>
+</body>
+</html>

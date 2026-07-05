@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{email/layout/email-layout :: layout(~{::body})}">
+<body>
+<div class="container">
+
+    <div class="sub-header">
+        <h1>Alerte : Plafond d'emprunt atteint</h1>
+    </div>
+
+    <div class="content">
+
+        <p>Bonjour <strong th:text="${memberName}"></strong>,</p>
+
+        <p>Votre compte présente un solde d’emprunt important et nous avons tenté d’appliquer les intérêts trimestriels.</p>
+
+        <div class="important">
+            <strong>Les intérêts n’ont <u>pas</u> été prélevés</strong> car votre emprunt dépasse actuellement le plafond autorisé en fonction de votre épargne.
+        </div>
+
+        <table class="table-info">
+            <tr>
+                <td class="label">Solde emprunt actuel</td>
+                <td th:text="${#numbers.formatDecimal(soldeActuel, 0, 0, 'POINT')} + ' FCFA'"></td>
+            </tr>
+            <tr>
+                <td class="label">Montant équivalent (avec intérêts)</td>
+                <td th:text="${#numbers.formatDecimal(montantEquivalent, 0, 0, 'POINT')} + ' FCFA'"></td>
+            </tr>
+            <tr>
+                <td class="label">Plafond autorisé (selon épargne)</td>
+                <td th:text="${#numbers.formatDecimal(plafondActuel, 0, 0, 'POINT')} + ' FCFA'"></td>
+            </tr>
+        </table>
+
+        <div class="action">
+            <strong>Que faire maintenant ?</strong><br/><br/>
+            Pour que les intérêts puissent être appliqués normalement au prochain trimestre, nous vous invitons à :<br/>
+            • Effectuer un ou plusieurs versements d’épargne<br/>
+            • Ou rembourser une partie de votre emprunt<br/><br/>
+            Dès que votre épargne permettra de respecter le plafond, les intérêts seront calculés et prélevés automatiquement.
+        </div>
+
+        <p>Nous restons à votre disposition pour toute question ou accompagnement.</p>
+
+        <p>Cordialement,<br/>
+            <strong>Votre Mutuelle Mobile</strong></p>
+
+    </div>
+</div>
+</body>
+</html>

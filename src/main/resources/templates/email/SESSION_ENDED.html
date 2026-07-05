@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{email/layout/email-layout :: layout(~{::body})}">
+<body>
+<div class="container">
+
+    <div class="sub-header">
+        <h1>Fin de la session <span th:text="${sessionName}"></span></h1>
+    </div>
+
+    <div class="content">
+
+        <p>Bonjour,</p>
+
+        <p>La session <strong th:text="${sessionName}"></strong> est maintenant clôturée.</p>
+
+        <table class="table-info">
+            <tr>
+                <td class="label">Session</td>
+                <td th:text="${sessionName}"></td>
+            </tr>
+            <tr>
+                <td class="label">Date de clôture</td>
+                <td th:text="${endDate}"></td>
+            </tr>
+            <tr>
+                <td class="label">Agapé par membre</td>
+                <td th:text="${#numbers.formatDecimal(agapePerMember, 0, 0, 'POINT')} + ' FCFA'"></td>
+            </tr>
+            <tr>
+                <td class="label">Total agapés distribués</td>
+                <td th:text="${totalAgapes}"></td>
+            </tr>
+        </table>
+
+        <p>Merci pour votre participation active au cours de cette session.</p>
+
+        <p>Cordialement,<br/>
+            <strong>Votre Mutuelle Mobile</strong></p>
+
+    </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{email/layout/email-layout :: layout(~{::body})}">
+<body>
+<h1>Bienvenue dans la Mutuelle ENSPY, <span th:text="${prenom}"></span> !</h1>
+
+<p>Votre inscription a bien été enregistrée.</p>
+
+<p><strong>Vos identifiants :</strong></p>
+<ul>
+    <li>Numéro d’adhérent : <strong th:text="${numeroAdherent}"></strong></li>
+</ul>
+
+<p>Nous restons à votre disposition pour toute question.</p>
+<p>À très bientôt dans votre espace Mutuelle ENSPY !</p>
+</body>
+</html>

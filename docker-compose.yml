@@ -1,0 +1,17 @@
+services:
+  app:
+    build: .
+    container_name: mutuelle_app
+    restart: unless-stopped
+    network_mode: "host"
+    environment:
+      SPRING_PROFILES_ACTIVE: prod
+      PGHOST: ${PGHOST}
+      PGPORT: ${PGPORT:-5432}
+      PGDATABASE: ${PGDATABASE}
+      PGUSER: ${PGUSER}
+      PGPASSWORD: ${PGPASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_ACCESS_EXPIRATION: ${JWT_ACCESS_EXPIRATION:-9000000000}
+      JWT_REFRESH_EXPIRATION: ${JWT_REFRESH_EXPIRATION:-604800000}
+      PORT: 8085

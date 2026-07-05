@@ -1,0 +1,37 @@
+[
+  {
+    "name": "MALADIE",
+    "description": "Assistance financière accordée au membre en cas de maladie nécessitant une prise en charge médicale.",
+    "amount": 300000.00
+  },
+  {
+    "name": "MARIAGE",
+    "description": "Aide financière accordée au membre à l’occasion de la célébration de son mariage.",
+    "amount": 100000.00
+  },
+  {
+    "name": "PROMOTION GRADE",
+    "description": "Assistance accordée au membre lors d’une promotion de grade ou d’avancement professionnel.",
+    "amount": 80000.00
+  },
+  {
+    "name": "DEPART RETRAITE",
+    "description": "Aide financière accordée au membre lors de son départ officiel à la retraite.",
+    "amount": 800000.00
+  },
+  {
+    "name": "DECES MEMBRE",
+    "description": "Assistance financière versée aux ayants droit en cas de décès du membre.",
+    "amount": 1000000.00
+  },
+  {
+    "name": "DECES CONJOINT",
+    "description": "Aide financière accordée au membre en cas de décès de son conjoint légal.",
+    "amount": 800000.00
+  },
+  {
+    "name": "DECES ENFANT",
+    "description": "Assistance financière accordée au membre en cas de décès de son enfant.",
+    "amount": 800000.00
+  }
+]

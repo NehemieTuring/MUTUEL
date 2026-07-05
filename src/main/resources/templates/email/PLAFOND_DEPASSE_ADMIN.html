@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org"
+      th:replace="~{email/layout/email-layout :: layout(~{::body})}">
+<body>
+<div class="container">
+
+    <div class="sub-header">
+        <h1>ALERTE – Plafond dépassé (intérêts non appliqués)</h1>
+    </div>
+
+    <div class="content">
+
+        <p><strong>Date :</strong> <span th:text="${#temporals.format(#now, 'dd/MM/yyyy HH:mm')}"></span></p>
+
+        <p>
+            <strong>Membre :</strong> <strong th:text="${memberName} ?: '—'"></strong>
+            (ID: <span th:text="${memberId} ?: '—'"></span>)
+        </p>
+
+        <div class="critical">
+            <strong>Les intérêts trimestriels n’ont PAS été prélevés</strong>
+            car le montant équivalent dépasse le plafond autorisé.
+        </div>
+
+        <table>
+            <tr th:with="montant = ${soldeActuel ?: T(java.math.BigDecimal).ZERO}">
+                <th>Solde emprunt actuel</th>
+                <td th:text="${#numbers.formatDecimal(montant, 0, 'WHITESPACE', 0, 'POINT')} + ' FCFA'"></td>
+            </tr>
+            <tr th:with="equiv = ${montantEquivalent ?: T(java.math.BigDecimal).ZERO}">
+                <th>Montant équivalent (avec intérêts)</th>
+                <td th:text="${#numbers.formatDecimal(equiv, 0, 'WHITESPACE', 0, 'POINT')} + ' FCFA'"></td>
+            </tr>
+
+            <tr th:with="plaf = ${plafondActuel ?: T(java.math.BigDecimal).ZERO}">
+                <th>Plafond autorisé (épargne actuelle)</th>
+                <td th:text="${#numbers.formatDecimal(plaf, 0, 'WHITESPACE', 0, 'POINT')} + ' FCFA'"></td>
+            </tr>
+
+            <tr th:with="ec = ${ecart ?: T(java.math.BigDecimal).ZERO}">
+                <th>Écart</th>
+                <td th:text="${#numbers.formatDecimal(ec, 0, 'WHITESPACE', 0, 'POINT')} + ' FCFA'"></td>
+            </tr>
+            <tr th:with="intCalc = ${interets ?: T(java.math.BigDecimal).ZERO}">
+                <th th:if="${intCalc.compareTo(T(java.math.BigDecimal).ZERO) > 0}">Intérêts non appliqués</th>
+                <td th:if="${intCalc.compareTo(T(java.math.BigDecimal).ZERO) > 0}"
+                    th:text="${#numbers.formatDecimal(intCalc, 0, 'WHITESPACE', 0, 'POINT')} + ' FCFA'"></td>
+                <th th:unless="${intCalc.compareTo(T(java.math.BigDecimal).ZERO) > 0}">Intérêts non appliqués</th>
+                <td th:unless="${intCalc.compareTo(T(java.math.BigDecimal).ZERO) > 0}">—</td>
+            </tr>
+            <tr>
+                <th>Session</th>
+                <td th:text="${sessionName ?: '—'}"></td>
+            </tr>
+        </table>
+
+        <p><strong>Prochain calcul :</strong> dans ~3 mois (la date lastInterest n’a pas été avancée)</p>
+
+        <p style="margin-top: 25px;">
+            Actions possibles :<br/>
+            • Contacter le membre pour proposer un remboursement partiel ou un versement d’épargne<br/>
+            • Vérifier si dérogation exceptionnelle (si applicable)<br/>
+            • Suivre l’évolution au prochain trimestre
+        </p>
+
+    </div>
+
+</div>
+</body>
+</html>
