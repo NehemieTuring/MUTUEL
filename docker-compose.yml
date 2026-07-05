@@ -1,17 +1,36 @@
+version: '3.8'
+
 services:
+  db:
+    image: postgres:16-alpine
+    container_name: mutuelle_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: mutuelle_mobile
+      POSTGRES_USER: mutuelle_user
+      POSTGRES_PASSWORD: mutuelle_password
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
   app:
     build: .
     container_name: mutuelle_app
     restart: unless-stopped
-    network_mode: "host"
+    ports:
+      - "8080:8080"
+    depends_on:
+      - db
     environment:
       SPRING_PROFILES_ACTIVE: prod
-      PGHOST: ${PGHOST}
-      PGPORT: ${PGPORT:-5432}
-      PGDATABASE: ${PGDATABASE}
-      PGUSER: ${PGUSER}
-      PGPASSWORD: ${PGPASSWORD}
-      JWT_SECRET: ${JWT_SECRET}
-      JWT_ACCESS_EXPIRATION: ${JWT_ACCESS_EXPIRATION:-9000000000}
-      JWT_REFRESH_EXPIRATION: ${JWT_REFRESH_EXPIRATION:-604800000}
-      PORT: 8085
+      PGHOST: db
+      PGPORT: 5432
+      PGDATABASE: mutuelle_mobile
+      PGUSER: mutuelle_user
+      PGPASSWORD: mutuelle_password
+      JWT_SECRET: Y2hvaWNlIG11dHVlbGxlIG1vYmlsZSBlc25weSBkZXZlbG9wbWVudCBzZWNyZXQga2V5IDEyMzQ1Njc4
+      JWT_ACCESS_EXPIRATION: 9000000000
+      JWT_REFRESH_EXPIRATION: 604800000
+      PORT: 8080
+
+volumes:
+  pgdata:
