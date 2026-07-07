@@ -28,6 +28,7 @@ public class TransactionMapper {
         return new TransactionResponseDTO(
                 tx.getId(),
                 tx.getAmount(),
+                tx.getDescription(),
                 tx.getTransactionType(),
                 tx.getTransactionDirection(),
                 tx.getAccountMember() != null ? tx.getAccountMember().getId() : null,

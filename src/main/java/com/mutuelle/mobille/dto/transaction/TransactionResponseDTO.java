@@ -10,6 +10,7 @@ import java.util.List;
 public record TransactionResponseDTO(
         Long id,
         BigDecimal amount,
+        String description,
         TransactionType transactionType,
         TransactionDirection transactionDirection,
         Long accountMemberId,
