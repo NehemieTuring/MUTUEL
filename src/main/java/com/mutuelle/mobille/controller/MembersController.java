@@ -48,7 +48,7 @@ public class MembersController {
 
             // Pagination et tri manuels (comme ton exemple transactions)
             @RequestParam(defaultValue = "0") @Min(0) int page,
-            @RequestParam(defaultValue = "20") @Min(1) @Max(100) int size,          // limite raisonnable
+            @RequestParam(defaultValue = "20") @Min(1) @Max(1000) int size,          // limite raisonnable
             @RequestParam(defaultValue = "lastname,asc") String sort) {
 
         // Préparation du tri
