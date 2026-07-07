@@ -27,7 +27,7 @@ public class MemberRegisterDTO {
     @NotNull(message = "Le téléphone est obligatoire")
     @Pattern(regexp = "^(\\+2376|6)[0-9]{8}$",
             message = "Format de téléphone invalide (ex: 698765432 ou +237691234567)")
-    @Size(min = 9, max = 13)
+    @Size(min = 9, max = 13, message = "Le numéro de téléphone doit contenir entre 9 et 13 caractères")
     private String phone;
 
     @NotNull(message = "L'email est obligatoire")
