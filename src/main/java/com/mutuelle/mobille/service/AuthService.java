@@ -62,6 +62,10 @@ public class AuthService {
             if (!member.isActive()) {
                 throw new AccountDisabledException("Compte désactivé par l'administration.");
             }
+            // Blocage pour inscription non payée
+            if (member.getStatus() == MemberStatus.PENDING) {
+                throw new AccountDisabledException("Inscription non payée. Veuillez contacter votre secrétaire générale.");
+            }
             // Blocage pour dette excessive
             if (member.getStatus() == MemberStatus.INACTIF) {
                 BigDecimal seuil = mutuelleConfigService.getCurrentConfig().getInsolvencyThreshold();

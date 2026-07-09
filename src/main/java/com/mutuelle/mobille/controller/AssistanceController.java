@@ -2,7 +2,6 @@ package com.mutuelle.mobille.controller;
 
 import com.mutuelle.mobille.dto.ApiResponseDto;
 import com.mutuelle.mobille.dto.assistance.*;
-import com.mutuelle.mobille.models.Assistance;
 import com.mutuelle.mobille.service.AssistanceService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -107,5 +106,22 @@ public class AssistanceController {
 
         AssistanceResponseDto created = assistanceService.createAssistance(request);
         return ResponseEntity.ok(ApiResponseDto.ok(created, "Demande d'assistance créée avec succès"));
+    }
+
+    @PatchMapping("/{id}/status")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Approuver ou rejeter une demande d'assistance")
+    public ResponseEntity<ApiResponseDto<AssistanceResponseDto>> updateStatus(
+            @PathVariable Long id,
+            @Valid @RequestBody UpdateAssistanceStatusDto request) {
+        AssistanceResponseDto updated = assistanceService.updateAssistanceStatus(id, request);
+        return ResponseEntity.ok(ApiResponseDto.ok(updated, "Statut mis à jour avec succès"));
+    }
+
+    @GetMapping("/my")
+    @PreAuthorize("hasRole('MEMBER')")
+    @Operation(summary = "Mes demandes d'assistance")
+    public ResponseEntity<ApiResponseDto<List<AssistanceResponseDto>>> getMyAssistances() {
+        return ResponseEntity.ok(ApiResponseDto.ok(assistanceService.getMyAssistances(), "Mes demandes récupérées"));
     }
 }

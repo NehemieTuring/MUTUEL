@@ -17,6 +17,9 @@ public interface AssistanceRepository extends JpaRepository<Assistance, Long> {
     // Utile pour récupérer les demandes d'un membre
     List<Assistance> findByMemberId(Long memberId);
 
+    // Récupérer les demandes d'un membre triées par date de création décroissante
+    List<Assistance> findByMemberIdOrderByCreatedAtDesc(Long memberId);
+
     // Ou par session
     List<Assistance> findBySessionId(Long sessionId);
 

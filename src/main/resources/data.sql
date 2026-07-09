@@ -16,4 +16,21 @@ SELECT
 FROM dual
 WHERE NOT EXISTS (SELECT 1 FROM auth_users WHERE email = 'admin@mutuelle.com');
 
+-- 3. Créer le commissaire aux comptes dans la table admins
+INSERT IGNORE INTO admins (full_name, is_active, pin, created_at, updated_at)
+SELECT 'Commissaire aux Comptes', true, '2025', NOW(), NOW()
+FROM dual
+WHERE NOT EXISTS (SELECT 1 FROM auth_users WHERE email = 'cac@mutuelle.com');
+
+-- 4. Créer l'AuthUser du CAC
+INSERT IGNORE INTO auth_users (email, password, role, user_ref_id, pin)
+SELECT
+    'cac@mutuelle.com',
+    '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi',
+    'COMMISSAIRE_COMPTE',
+    (SELECT id FROM admins WHERE full_name = 'Commissaire aux Comptes' ORDER BY id ASC LIMIT 1),
+    '2025'
+FROM dual
+WHERE NOT EXISTS (SELECT 1 FROM auth_users WHERE email = 'cac@mutuelle.com');
+
 

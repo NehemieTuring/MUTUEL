@@ -1,6 +1,7 @@
 package com.mutuelle.mobille.service;
 
 import com.mutuelle.mobille.dto.transaction.TransactionResponseDTO;
+import com.mutuelle.mobille.enums.MemberStatus;
 import com.mutuelle.mobille.enums.TransactionDirection;
 import com.mutuelle.mobille.enums.TransactionType;
 import com.mutuelle.mobille.mapper.TransactionMapper;
@@ -29,6 +30,11 @@ public class EpargneService {
     public TransactionResponseDTO processEpargne(Long memberId, BigDecimal amount, TransactionDirection direction) {
 
         AccountMember memberAccount = accountService.getMemberAccount(memberId);
+
+        // Blocage si inscription non payée
+        if (memberAccount.getMember() != null && memberAccount.getMember().getStatus() == MemberStatus.PENDING) {
+            throw new IllegalStateException("Opération refusée : ce membre n'a pas encore payé ses frais d'inscription.");
+        }
 
         Optional<Session> currentSessionOpt = sessionService.findCurrentSession();
         if (currentSessionOpt.isEmpty()) {

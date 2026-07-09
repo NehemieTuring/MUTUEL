@@ -2,6 +2,7 @@ package com.mutuelle.mobille.service;
 
 import com.mutuelle.mobille.dto.notifications.NotificationRequestDto;
 import com.mutuelle.mobille.enums.StatusSession;
+import com.mutuelle.mobille.enums.MemberStatus;
 import com.mutuelle.mobille.enums.TemplateMailsName;
 import com.mutuelle.mobille.enums.TransactionDirection;
 import com.mutuelle.mobille.enums.TransactionType;
@@ -43,6 +44,12 @@ public class EmpruntService {
     public void emprunter(Long memberId, BigDecimal montant) {
 
         AccountMember emprunteur = accountService.getMemberAccount(memberId);
+
+        // Blocage si inscription non payée
+        if (emprunteur.getMember() != null && emprunteur.getMember().getStatus() == MemberStatus.PENDING) {
+            throw new IllegalStateException("Opération refusée : ce membre n'a pas encore payé ses frais d'inscription.");
+        }
+
         Optional<Session> currentSessionOpt = sessionService.findCurrentSession();
 
         if (currentSessionOpt.isEmpty()) {
@@ -79,9 +86,10 @@ public class EmpruntService {
             );
         }
 
-        BigDecimal interet = interetService.calculerInteret(montant); // valeur de l'interet
+        BigDecimal interet = interetService.calculerInteret(montant);
+        BigDecimal montantNet = montant.subtract(interet); // ce que le membre reçoit réellement
 
-        accountService.borrowMoney(memberId, montant, currentSession.getId());
+        accountService.borrowMoney(memberId, montant, montantNet, currentSession.getId());
 
         Transaction trans = transactionRepository.save(
                 Transaction.builder()
@@ -90,7 +98,8 @@ public class EmpruntService {
                         .transactionType(TransactionType.EMPRUNT)
                         .transactionDirection(TransactionDirection.DEBIT)
                         .session(currentSession)
-                        .description("Emprunt de : "+emprunteur.getMember().getLastname())
+                        .description("Emprunt de : " + emprunteur.getMember().getLastname()
+                                + " | Net versé : " + montantNet + " FCFA | Intérêt 3% : " + interet + " FCFA")
                         .build()
         );
         BigDecimal currentInteret = currentSession.getTotalInteretAmount() != null
@@ -106,6 +115,12 @@ public class EmpruntService {
     public void rembourser(Long memberId, BigDecimal montant) {
 
         AccountMember membre = accountService.getMemberAccount(memberId);
+
+        // Blocage si inscription non payée
+        if (membre.getMember() != null && membre.getMember().getStatus() == MemberStatus.PENDING) {
+            throw new IllegalStateException("Opération refusée : ce membre n'a pas encore payé ses frais d'inscription.");
+        }
+
         Optional<Session> currentSessionOpt = sessionService.findCurrentSession();
         if (currentSessionOpt.isEmpty()) {
             throw new IllegalStateException("Impossible d'effectuer un remboursement : aucune session active en cours");
@@ -302,6 +317,43 @@ public class EmpruntService {
 //            interetService.redistribuerInteret(  penaliteFixe, txPenalite, session);
 //        }
 //    }
+
+    @Transactional
+    public void appliquerPenalites(Session session) {
+        MutuelleConfig config = mutuelleConfigRepository.findTopByOrderByUpdatedAtDesc()
+                .orElseThrow(() -> new IllegalStateException("Configuration mutuelle introuvable"));
+
+        BigDecimal penaliteFixe = config.getLoanPenaltyFixedAmount();
+        boolean penaliteActive = penaliteFixe != null && penaliteFixe.compareTo(BigDecimal.ZERO) > 0;
+        if (!penaliteActive) return;
+
+        int threshold = config.getLoanPenaltySessionThreshold() != null
+                ? config.getLoanPenaltySessionThreshold() : 3;
+
+        List<AccountMember> emprunteurs = accountService.findMembersWithBorrowGreaterThanZero();
+
+        for (AccountMember membreAcc : emprunteurs) {
+            Long borrowSessionId = membreAcc.getBorrowSessionId();
+            if (borrowSessionId == null) continue;
+
+            Session borrowSession = sessionRepository.findById(borrowSessionId).orElse(null);
+            if (borrowSession == null) continue;
+
+            long nbSessionsFermees = sessionRepository.countCompletedSessionsAfter(borrowSession.getStartDate());
+            if (nbSessionsFermees < threshold) continue;
+
+            accountService.addBorrowAmount(membreAcc, penaliteFixe);
+
+            transactionRepository.save(Transaction.builder()
+                    .accountMember(membreAcc)
+                    .amount(penaliteFixe)
+                    .transactionType(TransactionType.PENALITE)
+                    .transactionDirection(TransactionDirection.DEBIT)
+                    .session(session)
+                    .description("Pénalité de retard de remboursement")
+                    .build());
+        }
+    }
 
     private boolean aAtteintProchainTrimestre(LocalDateTime derniere, LocalDateTime actuelle) {
         if (derniere == null) return true;

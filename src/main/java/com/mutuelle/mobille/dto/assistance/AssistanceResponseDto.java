@@ -1,6 +1,7 @@
 package com.mutuelle.mobille.dto.assistance;
 
 import com.mutuelle.mobille.dto.transaction.TransactionResponseDTO;
+import com.mutuelle.mobille.enums.AssistanceStatus;
 import lombok.*;
 
 import java.math.BigDecimal;
@@ -28,6 +29,9 @@ public class AssistanceResponseDto {
     private TransactionResponseDTO transaction;
 
     private BigDecimal amountMove;
+
+    private AssistanceStatus status;
+    private String rejectReason;
 
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;

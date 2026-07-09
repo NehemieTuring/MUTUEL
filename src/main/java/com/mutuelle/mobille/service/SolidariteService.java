@@ -1,6 +1,7 @@
 package com.mutuelle.mobille.service;
 
 import com.mutuelle.mobille.enums.StatusSession;
+import com.mutuelle.mobille.enums.MemberStatus;
 import com.mutuelle.mobille.enums.TransactionDirection;
 import com.mutuelle.mobille.enums.TransactionType;
 import com.mutuelle.mobille.models.Session;
@@ -48,6 +49,11 @@ public class SolidariteService {
 
                 AccountMember memberAccount = memberRepo.findByMemberId(memberId)
                                 .orElseThrow(() -> new RuntimeException("Compte membre introuvable"));
+
+                // Blocage si inscription non payée
+                if (memberAccount.getMember() != null && memberAccount.getMember().getStatus() == MemberStatus.PENDING) {
+                    throw new IllegalStateException("Opération refusée : ce membre n'a pas encore payé ses frais d'inscription.");
+                }
 
                 AccountMutuelle globalAccount = accountService.getMutuelleGlobalAccount();
 

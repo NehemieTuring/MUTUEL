@@ -530,7 +530,29 @@ public class SessionService {
     public void onSessionEnded(Session session) {
         if (session.getHistory() != null) return;
 
-        empruntService.calculerEtRedistribuerInteretsPenalites();
+        // Redistribuer les intérêts accumulés à l'octroi des prêts pendant cette session
+        BigDecimal interetAccumule = session.getTotalInteretAmount() != null
+                ? session.getTotalInteretAmount()
+                : BigDecimal.ZERO;
+
+        if (interetAccumule.compareTo(BigDecimal.ZERO) > 0) {
+            // Créer la transaction globale d'intérêt
+            Transaction interetParent = Transaction.builder()
+                    .transactionType(TransactionType.INTERET)
+                    .transactionDirection(TransactionDirection.CREDIT)
+                    .amount(interetAccumule)
+                    .description("Redistribution intérêts session " + session.getName())
+                    .accountMember(null)
+                    .session(session)
+                    .build();
+            Transaction savedInteretParent = transactionRepository.save(interetParent);
+
+            // Redistribuer aux membres légitimes (solidarité et renflouement à jour)
+            interetService.redistribuerInteret(interetAccumule, savedInteretParent, session);
+        }
+
+        // Pénalités sur emprunts en retard (séparées des intérêts d'octroi)
+        empruntService.appliquerPenalites(session);
 
         AccountMutuelle mutuelleacc = accountService.getMutuelleGlobalAccount();
         Long sessionId = session.getId();
@@ -695,6 +717,7 @@ public class SessionService {
                 .name(s.getName())
                 //.solidarityAmount(s.getSolidarityAmount())
                 .agapeAmountPerMember(s.getAgapeAmountPerMember())
+                .totalInteretAmount(s.getTotalInteretAmount() != null ? s.getTotalInteretAmount() : java.math.BigDecimal.ZERO)
                 .startDate(s.getStartDate())
                 .endDate(s.getEndDate())
                 .status(s.getStatus())

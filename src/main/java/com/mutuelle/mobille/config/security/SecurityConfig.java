@@ -77,6 +77,34 @@ public class SecurityConfig {
                         // MEMBER + ADMIN + SUPER_ADMIN
                         .requestMatchers("/api/members/me", "/api/members/me/**").hasRole("MEMBER")
 
+                        // MEMBER : accès à ses propres transactions et assistances
+                        .requestMatchers(
+                                org.springframework.http.HttpMethod.GET,
+                                "/api/transactions/my",
+                                "/api/assistances/my"
+                        ).hasRole("MEMBER")
+
+                        // COMMISSAIRE_COMPTE : lecture seule sur transactions et bilans + approbation clôture exercice
+                        .requestMatchers(
+                                org.springframework.http.HttpMethod.GET,
+                                "/api/transactions",
+                                "/api/transactions/**",
+                                "/api/exercices",
+                                "/api/exercices/**",
+                                "/api/sessions",
+                                "/api/sessions/**",
+                                "/api/bilan/**",
+                                "/api/members",
+                                "/api/accounts/**",
+                                "/api/renfoulements",
+                                "/api/context"
+                        ).hasAnyRole("COMMISSAIRE_COMPTE", "ADMIN", "SUPER_ADMIN", "PRESIDENT", "TRESORIER")
+                        .requestMatchers(
+                                org.springframework.http.HttpMethod.POST,
+                                "/api/exercices/*/approve-closure",
+                                "/api/exercices/*/reject-closure"
+                        ).hasRole("COMMISSAIRE_COMPTE")
+
                         // Tout le reste → authentifié
                         .anyRequest().authenticated()
                 )

@@ -7,6 +7,7 @@ public enum Role {
     ADMIN("ADMIN"),
     PRESIDENT("PRESIDENT"),
     TRESORIER("TRESORIER"),
+    COMMISSAIRE_COMPTE("COMMISSAIRE_COMPTE"),
     MEMBER("MEMBER");
 
     private final String value;

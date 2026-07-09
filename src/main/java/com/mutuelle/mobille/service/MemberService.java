@@ -70,7 +70,7 @@ public class MemberService {
                 .firstname(dto.getFirstname().trim())
                 .lastname(dto.getLastname().trim())
                 .phone(dto.getPhone().trim())
-                .status(MemberStatus.ACTIF)
+                .status(MemberStatus.PENDING)
                 .isActive(true)
                 .accountMember(accountMember)
                 .build();
@@ -189,12 +189,9 @@ public class MemberService {
                     ));
         }
 
-        // Filtre actif/inactif
+        // Filtre actif/inactif (si non précisé, on retourne TOUS les membres)
         if (active != null) {
             spec = spec.and((root, query, cb) -> cb.equal(root.get("isActive"), active));
-        } else {
-            // Par défaut : seulement les actifs (comme ton findAllActiveWithAccount)
-            spec = spec.and((root, query, cb) -> cb.isTrue(root.get("isActive")));
         }
 
         // Filtre date création après
@@ -368,6 +365,11 @@ public class MemberService {
             throw new IllegalStateException("Compte associé introuvable pour ce membre");
         }
 
+        // Bloquer toute action sur un membre PENDING (inscription non payée)
+        if (member.getStatus() == MemberStatus.PENDING) {
+            throw new IllegalStateException("Impossible d'activer/désactiver un membre dont l'inscription n'est pas payée. Enregistrez d'abord le paiement de l'inscription.");
+        }
+
         // Mise à jour des deux entités (cohérence)
         boolean wasActive = member.isActive();
 
@@ -408,6 +410,13 @@ public class MemberService {
     public MemberStatus calculateMemberStatus(AccountMember account) {
         if (account == null) {
             throw new IllegalArgumentException("Impossible");
+        }
+
+        // PENDING : inscription non payée
+        BigDecimal unpaidRegistration = account.getUnpaidRegistrationAmount() != null
+                ? account.getUnpaidRegistrationAmount() : BigDecimal.ZERO;
+        if (unpaidRegistration.compareTo(BigDecimal.ZERO) > 0) {
+            return MemberStatus.PENDING;
         }
 
         BigDecimal unpaidSolidarity = account.getUnpaidSolidarityAmount() != null

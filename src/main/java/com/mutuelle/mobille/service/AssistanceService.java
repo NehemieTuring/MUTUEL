@@ -1,16 +1,16 @@
 package com.mutuelle.mobille.service;
 
 import com.mutuelle.mobille.dto.assistance.*;
+import com.mutuelle.mobille.enums.AssistanceStatus;
 import com.mutuelle.mobille.enums.StatusSession;
-import com.mutuelle.mobille.enums.TemplateMailsName;
 import com.mutuelle.mobille.enums.TransactionDirection;
 import com.mutuelle.mobille.enums.TransactionType;
 import com.mutuelle.mobille.mapper.AssistanceMapper;
-import com.mutuelle.mobille.mapper.TransactionMapper;
 import com.mutuelle.mobille.models.*;
 import com.mutuelle.mobille.models.account.AccountMutuelle;
 import com.mutuelle.mobille.repository.*;
 import com.mutuelle.mobille.service.notifications.SessionNotificationHelper;
+import com.mutuelle.mobille.utils.SecurityUtil;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
@@ -20,9 +20,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.stream.Collectors;
 
 @Service
@@ -73,88 +71,143 @@ public class AssistanceService {
         return mapToTypeAssistanceResponseDto(updated);
     }
 
-    // Créer une assistance
+    // Créer une assistance en PENDING (pas de débit, pas de transaction)
     public AssistanceResponseDto createAssistance(CreateAssistanceDto dto) {
-        // Récupération des entités nécessaires
-        AccountMutuelle globalAccount = accountService.getMutuelleGlobalAccount();
+        // Récupérer le membre : soit depuis dto.memberId() si ADMIN, soit depuis SecurityUtil si MEMBER
+        final Long memberId = dto.memberId() != null ? dto.memberId() : SecurityUtil.getCurrentUserRefId();
 
-        Member member = memberRepository.findById(dto.memberId())
-                .orElseThrow(() -> new EntityNotFoundException("Membre non trouvé avec l'ID : " + dto.memberId()));
+        Member member = memberRepository.findById(memberId)
+                .orElseThrow(() -> new EntityNotFoundException("Membre non trouvé : " + memberId));
+
+        // Vérifier que le membre est en règle (inscription + solidarité + renflouement)
+        var account = member.getAccountMember();
+        if (account != null) {
+            java.math.BigDecimal zero = java.math.BigDecimal.ZERO;
+
+            if (account.getUnpaidRegistrationAmount() != null &&
+                account.getUnpaidRegistrationAmount().compareTo(zero) > 0) {
+                throw new IllegalStateException(
+                    "Demande refusée : ce membre n'a pas encore payé ses frais d'inscription."
+                );
+            }
+            if (account.getUnpaidSolidarityAmount() != null &&
+                account.getUnpaidSolidarityAmount().compareTo(zero) > 0) {
+                throw new IllegalStateException(
+                    "Demande refusée : ce membre a une cotisation de solidarité impayée."
+                );
+            }
+            if (account.getUnpaidRenfoulement() != null &&
+                account.getUnpaidRenfoulement().compareTo(zero) > 0) {
+                throw new IllegalStateException(
+                    "Demande refusée : ce membre a un renflouement impayé."
+                );
+            }
+        }
 
         TypeAssistance typeAssistance = typeAssistanceRepository.findById(dto.typeAssistanceId())
-                .orElseThrow(() -> new EntityNotFoundException("Type d'assistance non trouvé avec l'ID : " + dto.typeAssistanceId()));
+                .orElseThrow(() -> new EntityNotFoundException("Type d'assistance non trouvé : " + dto.typeAssistanceId()));
 
-        Session session = sessionRepository.findById(dto.sessionId())
-                .orElseThrow(() -> new EntityNotFoundException("Session non trouvée avec l'ID : " + dto.sessionId()));
-
-        //  La session doit être EN COURS
-        if (session.getStatus() != StatusSession.IN_PROGRESS) {
-            throw new IllegalStateException(
-                    String.format("Impossible de payer la solidarité : la session '%s' n'est pas en cours. (Statut actuel: %s)",
-                            session.getName(),
-                            session.getStatus()
-                    )
-            );
+        // Session : soit depuis dto.sessionId(), soit la session courante
+        Session session;
+        if (dto.sessionId() != null) {
+            session = sessionRepository.findById(dto.sessionId())
+                    .orElseThrow(() -> new EntityNotFoundException("Session non trouvée : " + dto.sessionId()));
+        } else {
+            session = sessionRepository.findAll().stream()
+                    .filter(s -> s.getStatus() == StatusSession.IN_PROGRESS)
+                    .findFirst()
+                    .orElseThrow(() -> new IllegalStateException("Aucune session active pour soumettre une demande d'assistance"));
         }
 
-        BigDecimal requiredAmount = typeAssistance.getAmount();
-
-        // Vérification du solde de solidarité du compte global
-        if (globalAccount.getSolidarityAmount().compareTo(requiredAmount) < 0) {
-            throw new IllegalStateException("La mutuelle ne dispose pas d'assez de fonds pour cette assistance. Solde disponible : "
-                    + globalAccount.getSolidarityAmount() + ", requis : " + requiredAmount);
-        }
-
-        // Débit du compte global de la mutuelle
-        globalAccount.setSolidarityAmount(globalAccount.getSolidarityAmount().subtract(requiredAmount));
-        // Pas besoin de save ici si AccountMutuelle est géré par cascade ou si le service le fait, sinon ajouter un save si nécessaire
-        accountMutuelleRepository.save(globalAccount);
-
-        // Créer la transaction associée (type ASSISTANCE)
-        Transaction transaction = Transaction.builder()
-                .transactionType(TransactionType.ASSISTANCE)
-                .transactionDirection(TransactionDirection.DEBIT)
-                .amount(requiredAmount)
-                .description("Demande d'assistance : " + typeAssistance.getName())
-                .accountMember(member.getAccountMember())
-                .session(session)
-                .build();
-
-
-        Transaction savedTransaction = transactionRepository.save(transaction);
-
-
-        // Créer l'assistance
+        // Créer la demande en PENDING (pas de débit, pas de transaction)
         Assistance assistance = Assistance.builder()
                 .description(dto.description())
                 .typeAssistance(typeAssistance)
-                .transaction(savedTransaction)
-                .amountMove(requiredAmount)
+                .amountMove(typeAssistance.getAmount())
                 .member(member)
                 .session(session)
+                .status(AssistanceStatus.PENDING)
+                .rejectReason(null)
+                .transaction(null)
                 .build();
-        Assistance savedAssistance = assistanceRepository.save(assistance);
 
-        //
-        notificationHelper.notifyAssistanceCreated(savedAssistance);
-
-        return assistanceMapper.toResponseDto(savedAssistance);
+        Assistance saved = assistanceRepository.save(assistance);
+        notificationHelper.notifyAssistanceCreated(saved);
+        return assistanceMapper.toResponseDto(saved);
     }
 
+    // Approuver ou rejeter une demande d'assistance
+    public AssistanceResponseDto updateAssistanceStatus(Long id, UpdateAssistanceStatusDto dto) {
+        Assistance assistance = assistanceRepository.findById(id)
+                .orElseThrow(() -> new EntityNotFoundException("Assistance non trouvée : " + id));
+
+        if (assistance.getStatus() != AssistanceStatus.PENDING) {
+            throw new IllegalStateException("Cette demande a déjà été traitée (statut : " + assistance.getStatus() + ")");
+        }
+
+        if (dto.status() == AssistanceStatus.APPROVED) {
+            // Vérifier et débiter la caisse solidarité
+            AccountMutuelle globalAccount = accountService.getMutuelleGlobalAccount();
+            BigDecimal requiredAmount = assistance.getAmountMove();
+
+            if (globalAccount.getSolidarityAmount().compareTo(requiredAmount) < 0) {
+                throw new IllegalStateException("Fonds insuffisants. Disponible : "
+                        + globalAccount.getSolidarityAmount() + ", requis : " + requiredAmount);
+            }
+
+            globalAccount.setSolidarityAmount(globalAccount.getSolidarityAmount().subtract(requiredAmount));
+            accountMutuelleRepository.save(globalAccount);
+
+            // Créer la transaction
+            Transaction transaction = Transaction.builder()
+                    .transactionType(TransactionType.ASSISTANCE)
+                    .transactionDirection(TransactionDirection.DEBIT)
+                    .amount(requiredAmount)
+                    .description("Assistance approuvée : " + assistance.getTypeAssistance().getName())
+                    .accountMember(assistance.getMember().getAccountMember())
+                    .session(assistance.getSession())
+                    .build();
+
+            Transaction savedTx = transactionRepository.save(transaction);
+            assistance.setTransaction(savedTx);
+            assistance.setStatus(AssistanceStatus.APPROVED);
+            assistance.setRejectReason(null);
+
+        } else if (dto.status() == AssistanceStatus.REJECTED) {
+            assistance.setStatus(AssistanceStatus.REJECTED);
+            assistance.setRejectReason(dto.rejectReason());
+            // Pas de débit, pas de transaction
+
+        } else {
+            throw new IllegalArgumentException("Statut invalide : " + dto.status());
+        }
+
+        Assistance updated = assistanceRepository.save(assistance);
+        return assistanceMapper.toResponseDto(updated);
+    }
+
+    // Récupérer les assistances du membre connecté
+    @Transactional(readOnly = true)
+    public List<AssistanceResponseDto> getMyAssistances() {
+        Long memberId = SecurityUtil.getCurrentUserRefId();
+        return assistanceRepository.findByMemberIdOrderByCreatedAtDesc(memberId)
+                .stream()
+                .map(assistanceMapper::toResponseDto)
+                .collect(Collectors.toList());
+    }
 
     /**
      * Calcule le montant total des assistances validées/accordées pour une session donnée.
-     * (on peut filtrer sur un statut si tu en ajoutes un plus tard : APPROVED, PAID, etc.)
      */
     public BigDecimal getTotalAssistanceAmountForSession(Long sessionId) {
-        Session session = sessionRepository.findById(sessionId)
+        sessionRepository.findById(sessionId)
                 .orElseThrow(() -> new EntityNotFoundException("Session non trouvée : " + sessionId));
 
         return transactionRepository.sumAssistanceAmountBySessionId(sessionId);
     }
 
-    public Long countTotalAssistanceForSession(Long sessionId){
-        return  assistanceRepository.countBySessionId(sessionId);
+    public Long countTotalAssistanceForSession(Long sessionId) {
+        return assistanceRepository.countBySessionId(sessionId);
     }
 
     // Nombre total d'assistances pour un membre donné
@@ -192,7 +245,7 @@ public class AssistanceService {
                 pageable
         );
 
-        return  assistances.map(a->assistanceMapper.toResponseDto(a));
+        return assistances.map(a -> assistanceMapper.toResponseDto(a));
     }
 
     private TypeAssistanceResponseDto mapToTypeAssistanceResponseDto(TypeAssistance type) {
@@ -203,6 +256,4 @@ public class AssistanceService {
                 type.getDescription()
         );
     }
-
-
 }

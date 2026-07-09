@@ -6,11 +6,7 @@ public record CreateAssistanceDto(
         @NotNull(message = "L'ID du type d'assistance est obligatoire")
         Long typeAssistanceId,
 
-        @NotNull(message = "L'ID de la session est obligatoire")
-        Long sessionId,
-
-        @NotNull(message = "L'ID du membre est obligatoire")
-        Long memberId,
-
+        Long sessionId,    // optionnel — si null, utilise la session active
+        Long memberId,     // optionnel — si null, utilise le membre connecté
         String description
 ) {}

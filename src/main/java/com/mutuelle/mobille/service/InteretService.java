@@ -74,7 +74,11 @@ public class InteretService {
         }
 
         List<AccountMember> beneficiaires = accountService.getAllMemberAccounts().stream()
-                .filter(acc -> acc.getSavingAmount().compareTo(BigDecimal.ZERO) > 0)
+                .filter(acc -> acc.isActive()
+                        && acc.getSavingAmount().compareTo(BigDecimal.ZERO) > 0
+                        && (acc.getUnpaidRegistrationAmount() == null || acc.getUnpaidRegistrationAmount().compareTo(BigDecimal.ZERO) == 0)
+                        && (acc.getUnpaidSolidarityAmount() == null || acc.getUnpaidSolidarityAmount().compareTo(BigDecimal.ZERO) == 0)
+                        && (acc.getUnpaidRenfoulement() == null || acc.getUnpaidRenfoulement().compareTo(BigDecimal.ZERO) == 0))
                 .toList();
 
         if (beneficiaires.isEmpty()) {

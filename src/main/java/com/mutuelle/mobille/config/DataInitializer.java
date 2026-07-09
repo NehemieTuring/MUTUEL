@@ -45,6 +45,8 @@ public class DataInitializer implements CommandLineRunner {
         createDefaultAdminIfNotExists();
         createDefaultPresidentIfNotExists();
         createDefaultTresorierIfNotExists();
+        createDefaultCacIfNotExists();
+        createDefaultSecretaireGeneraleIfNotExists();
         initializeMembersIfNeeded();
         initializeTypeAssistancesIfNeeded();
     }
@@ -149,16 +151,61 @@ public class DataInitializer implements CommandLineRunner {
         System.out.println("Trésorier créé avec succès : " + email + " (mot de passe : admin123)");
     }
 
-    // Nouvelle méthode pour les membres
-    private void initializeMembersIfNeeded() {
-        // Vérification rapide : si des membres existent déjà, on skippe tout
-        if (memberRepository.count() >= 50) {
-            log.info("Des membres existent déjà en base ({}). Initialisation des membres ignorée.",
-                    memberRepository.count());
+    @Transactional
+    private void createDefaultCacIfNotExists() {
+        String email = "cac@mutuelle.com";
+
+        if (authUserRepository.existsByEmail(email)) {
             return;
         }
 
-        log.info("Aucun membre trouvé. Initialisation des 60 membres existants...");
+        Admin cac = new Admin();
+        cac.setFullName("Commissaire aux Comptes");
+        cac.setIsActive(true);
+        cac = adminRepository.saveAndFlush(cac);
+
+        AuthUser authUser = new AuthUser();
+        authUser.setEmail(email);
+        authUser.setPasswordHash(passwordEncoder.encode("admin123"));
+        authUser.setRole(Role.COMMISSAIRE_COMPTE);
+        authUser.setUserRefId(cac.getId());
+
+        authUserRepository.save(authUser);
+
+        System.out.println("Commissaire aux Comptes créé avec succès : " + email + " (mot de passe : admin123)");
+    }
+
+    @Transactional
+    private void createDefaultSecretaireGeneraleIfNotExists() {
+        String email = "secretaire@mutuelle.com";
+
+        if (authUserRepository.existsByEmail(email)) {
+            return;
+        }
+
+        Admin secretaire = new Admin();
+        secretaire.setFullName("Secrétaire Générale de la Mutuelle");
+        secretaire.setIsActive(true);
+        secretaire = adminRepository.saveAndFlush(secretaire);
+
+        AuthUser authUser = new AuthUser();
+        authUser.setEmail(email);
+        authUser.setPasswordHash(passwordEncoder.encode("admin123"));
+        authUser.setRole(Role.ADMIN);
+        authUser.setUserRefId(secretaire.getId());
+
+        authUserRepository.save(authUser);
+
+        System.out.println("Secrétaire Générale créée avec succès : " + email + " (mot de passe : admin123)");
+    }
+
+    private void initializeMembersIfNeeded() {
+        if (memberRepository.count() >= 50) {
+            log.info("Des membres existent déjà en base ({}). Initialisation ignorée.", memberRepository.count());
+            return;
+        }
+
+        log.info("Aucun membre trouvé. Chargement des 59 membres depuis members.json...");
 
         try (InputStream inputStream = resourceLoader
                 .getResource("classpath:data/members.json")
@@ -174,15 +221,13 @@ public class DataInitializer implements CommandLineRunner {
                     memberService.registerMember(dto);
                     log.info("Membre initialisé : {} {}", dto.getFirstname(), dto.getLastname());
                 } catch (Exception e) {
-                    log.warn("Échec création membre {} {} : {}",
-                            dto.getFirstname(), dto.getLastname(), e.getMessage());
-                    // On continue avec les autres membres même si un échoue
+                    log.warn("Échec création membre {} {} : {}", dto.getFirstname(), dto.getLastname(), e.getMessage());
                 }
             }
 
-            log.info("Initialisation des 60 membres terminée.");
+            log.info("Initialisation des membres terminée ({} membres chargés).", memberRepository.count());
         } catch (Exception e) {
-            log.error("Erreur lors du chargement du fichier initial-members.json", e);
+            log.error("Erreur lors du chargement de members.json", e);
         }
     }
 

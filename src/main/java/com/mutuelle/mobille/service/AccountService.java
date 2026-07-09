@@ -300,10 +300,15 @@
         }
 
         /**
-         * Un membre emprunte de l'argent à la mutuelle
+         * Un membre emprunte de l'argent à la mutuelle.
+         *
+         * @param memberId   ID du membre
+         * @param amount     Montant brut de l'emprunt (dette du membre, ce qu'il devra rembourser)
+         * @param montantNet Montant net versé au membre (amount - intérêt 3%)
+         * @param sessionId  ID de la session courante
          */
         @Transactional
-        public void borrowMoney(Long memberId, BigDecimal amount, Long sessionId) {
+        public void borrowMoney(Long memberId, BigDecimal amount, BigDecimal montantNet, Long sessionId) {
             LocalDateTime now = LocalDateTime.now();
 
             if (amount == null || amount.compareTo(BigDecimal.ZERO) <= 0) {
@@ -313,17 +318,21 @@
             AccountMember memberAccount = getMemberAccount(memberId);
             AccountMutuelle globalAccount = getMutuelleGlobalAccount();
 
-            // Vérifie que la mutuelle a assez d'épargne globale
-            if (globalAccount.getSavingAmount().compareTo(amount) < 0) {
+            // Vérifie que la mutuelle a assez d'épargne pour verser le montant net
+            if (globalAccount.getSavingAmount().compareTo(montantNet) < 0) {
                 throw new IllegalStateException("Fonds insuffisants dans la mutuelle");
             }
+
             memberAccount.setInitialBorrowAmount(amount);
             memberAccount.setLastInterestDate(now);
             memberAccount.setBorrowSessionId(sessionId);
 
+            // La dette du membre = montant brut (il devra rembourser le montant total)
             memberAccount.setBorrowAmount(memberAccount.getBorrowAmount().add(amount));
             globalAccount.setBorrowAmount(globalAccount.getBorrowAmount().add(amount));
-            globalAccount.setSavingAmount(globalAccount.getSavingAmount().subtract(amount));
+
+            // La caisse ne débite que le montant net (les intérêts restent dans totalInteretAmount de la session)
+            globalAccount.setSavingAmount(globalAccount.getSavingAmount().subtract(montantNet));
 
             memberRepo.save(memberAccount);
             globalRepo.save(globalAccount);

@@ -47,6 +47,14 @@ public class ContributionService {
             throw new IllegalStateException("Le membre n'a plus de " + contributionName + " impayés");
         }
 
+        // L'inscription doit être payée en totalité (pas de paiement partiel)
+        if (type == TransactionType.INSCRIPTION && amount.compareTo(unpaidBefore) != 0) {
+            throw new IllegalArgumentException(
+                    String.format("Les frais d'inscription doivent être payés en totalité. Montant attendu : %s FCFA",
+                            unpaidBefore)
+            );
+        }
+
         if (amount.compareTo(unpaidBefore) > 0) {
             throw new IllegalArgumentException(
                     String.format("Le montant payé (%s) dépasse le montant dû (%s) pour le %s",

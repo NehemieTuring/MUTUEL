@@ -13,8 +13,10 @@ public class MemberUpdateDTO {
         @Size(min = 2, max = 50, message = "Le nom doit contenir entre 2 et 50 caractères")
         private String lastname;
 
-        @Pattern(regexp = "^(\\+237|0)[6-9][0-9]{8}$",
-                message = "Format de téléphone invalide (ex: 0698765432 ou +237691234567)")
-        @Size(max = 15)
+        @Pattern(
+                regexp = "^(\\+2376|6)[0-9]{8}$",
+                message = "Numéro invalide. Formats acceptés : 6XXXXXXXX ou +2376XXXXXXXX (9 chiffres après 6)"
+        )
+        @Size(min = 9, max = 13, message = "Le numéro doit contenir entre 9 et 13 caractères")
         private String phone;
 }

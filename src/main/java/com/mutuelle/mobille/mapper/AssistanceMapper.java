@@ -27,7 +27,7 @@ public class AssistanceMapper {
                 .typeAssistanceAmount(assistance.getTypeAssistance().getAmount())
 
                 .memberId(assistance.getMember().getId())
-                .memberFullName(assistance.getMember().getFirstname()+ " " + assistance.getMember().getLastname())
+                .memberFullName(assistance.getMember().getFirstname() + " " + assistance.getMember().getLastname())
 
                 .sessionId(assistance.getSession().getId())
                 .sessionName(assistance.getSession().getName())
@@ -35,6 +35,10 @@ public class AssistanceMapper {
                 .transaction(TransactionMapper.toResponseDTO(assistance.getTransaction()))
 
                 .amountMove(assistance.getAmountMove())
+
+                .status(assistance.getStatus())
+                .rejectReason(assistance.getRejectReason())
+
                 .createdAt(assistance.getCreatedAt())
                 .updatedAt(assistance.getUpdatedAt())
                 .build();

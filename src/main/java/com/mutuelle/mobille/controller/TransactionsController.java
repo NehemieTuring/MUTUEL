@@ -28,6 +28,7 @@ import java.util.List;
 public class TransactionsController {
 
     private final TransactionService transactionService;
+    private final com.mutuelle.mobille.service.AccountService accountService;
 
     @GetMapping
     @PreAuthorize("isAuthenticated()")
@@ -57,6 +58,42 @@ public class TransactionsController {
         ApiResponseDto<List<TransactionResponseDTO>> response = ApiResponseDto.okPaged(
                 result.getContent(),
                 "Liste des transactions récupérée avec succès",
+                result.getTotalElements(),
+                result.getTotalPages(),
+                result.getNumber(),
+                result.getSize()
+        );
+
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/my")
+    @PreAuthorize("hasRole('MEMBER')")
+    @Operation(summary = "Lister les transactions du membre connecté")
+    public ResponseEntity<ApiResponseDto<List<TransactionResponseDTO>>> getMyTransactions(
+            @RequestParam(required = false) TransactionType type,
+            @RequestParam(required = false) TransactionDirection direction,
+            @RequestParam(defaultValue = "0") @Min(0) int page,
+            @RequestParam(defaultValue = "20") @Min(1) int size,
+            @RequestParam(defaultValue = "createdAt,desc") String sort) {
+
+        Long memberId = com.mutuelle.mobille.utils.SecurityUtil.getCurrentUserRefId();
+
+        com.mutuelle.mobille.models.account.AccountMember account =
+            accountService.getMemberAccount(memberId);
+        Long accountMemberId = account.getId();
+
+        String[] sortParams = sort.split(",");
+        Sort.Direction directionSort = sortParams.length > 1 && sortParams[1].equalsIgnoreCase("asc")
+                ? Sort.Direction.ASC : Sort.Direction.DESC;
+        Pageable pageable = PageRequest.of(page, size, Sort.by(directionSort, sortParams[0]));
+
+        Page<TransactionResponseDTO> result = transactionService.getTransactionsFiltered(
+                type, null, direction, null, null, accountMemberId, null, null, pageable);
+
+        ApiResponseDto<List<TransactionResponseDTO>> response = ApiResponseDto.okPaged(
+                result.getContent(),
+                "Transactions du membre récupérées avec succès",
                 result.getTotalElements(),
                 result.getTotalPages(),
                 result.getNumber(),

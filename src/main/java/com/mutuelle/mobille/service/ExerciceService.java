@@ -571,6 +571,63 @@ public class ExerciceService {
                 exercice.getId(), renfoulementUnitaire, nbMembresAJour, membresActifs.size());
     }
 
+    @Transactional
+    @PreAuthorize("hasRole('ADMIN')")
+    public ExerciceResponseDTO requestClosure(Long exerciceId) {
+        Exercice exercice = exerciceRepository.findById(exerciceId)
+                .orElseThrow(() -> new RuntimeException("Exercice non trouvé : " + exerciceId));
+
+        if (exercice.getStatus() != StatusExercice.IN_PROGRESS) {
+            throw new IllegalStateException("Seul un exercice en cours peut être soumis à clôture");
+        }
+
+        // Vérifier qu'aucune session n'est en cours
+        List<Session> sessionsEnCours = sessionRepository.findByExerciceIdAndStatus(
+                exercice.getId(), StatusSession.IN_PROGRESS);
+        if (!sessionsEnCours.isEmpty()) {
+            throw new IllegalStateException("Veuillez d'abord clôturer la session ouverte.");
+        }
+
+        exercice.setStatus(StatusExercice.PENDING_CLOSURE);
+        exercice = exerciceRepository.save(exercice);
+        log.info("Exercice '{}' soumis pour approbation de clôture", exercice.getName());
+        return toResponseDTO(exercice);
+    }
+
+    @Transactional
+    @PreAuthorize("hasRole('COMMISSAIRE_COMPTE')")
+    public ExerciceResponseDTO approveClosure(Long exerciceId) {
+        Exercice exercice = exerciceRepository.findById(exerciceId)
+                .orElseThrow(() -> new RuntimeException("Exercice non trouvé : " + exerciceId));
+
+        if (exercice.getStatus() != StatusExercice.PENDING_CLOSURE) {
+            throw new IllegalStateException("Cet exercice n'est pas en attente de clôture");
+        }
+
+        exercice.setEndDate(LocalDateTime.now());
+        exercice.setStatus(StatusExercice.COMPLETED);
+        exercice = exerciceRepository.save(exercice);
+        onExerciceEnded(exercice);
+        log.info("Exercice '{}' approuvé et clôturé par le CAC", exercice.getName());
+        return toResponseDTO(exercice);
+    }
+
+    @Transactional
+    @PreAuthorize("hasRole('COMMISSAIRE_COMPTE')")
+    public ExerciceResponseDTO rejectClosure(Long exerciceId, String motif) {
+        Exercice exercice = exerciceRepository.findById(exerciceId)
+                .orElseThrow(() -> new RuntimeException("Exercice non trouvé : " + exerciceId));
+
+        if (exercice.getStatus() != StatusExercice.PENDING_CLOSURE) {
+            throw new IllegalStateException("Cet exercice n'est pas en attente de clôture");
+        }
+
+        exercice.setStatus(StatusExercice.IN_PROGRESS);
+        exercice = exerciceRepository.save(exercice);
+        log.info("Clôture de l'exercice '{}' rejetée par le CAC. Motif : {}", exercice.getName(), motif);
+        return toResponseDTO(exercice);
+    }
+
     public ExerciceResponseDTO toResponseDTO(Exercice ex) {
         return ExerciceResponseDTO.builder()
                 .id(ex.getId())

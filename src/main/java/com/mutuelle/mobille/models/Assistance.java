@@ -1,5 +1,6 @@
 package com.mutuelle.mobille.models;
 
+import com.mutuelle.mobille.enums.AssistanceStatus;
 import jakarta.persistence.*;
 import lombok.*;
 import java.math.BigDecimal;
@@ -27,9 +28,9 @@ public class Assistance {
 
     @Column(name = "amount_move", precision = 12, scale = 2, nullable = false)
     private BigDecimal amountMove = BigDecimal.ZERO;
- 
-    @OneToOne(cascade = CascadeType.ALL, fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "transaction_id", nullable = false)
+
+    @OneToOne(cascade = CascadeType.ALL, fetch = FetchType.LAZY)
+    @JoinColumn(name = "transaction_id")
     private Transaction transaction;
 
     // === Relation avec Member : ManyToOne ===
@@ -41,6 +42,13 @@ public class Assistance {
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "session_id", nullable = false)
     private Session session;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false)
+    private AssistanceStatus status = AssistanceStatus.PENDING;
+
+    @Column(name = "reject_reason", length = 500)
+    private String rejectReason;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

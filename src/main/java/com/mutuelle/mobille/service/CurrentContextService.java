@@ -79,6 +79,11 @@ public class CurrentContextService {
                 adminRepository.findById(userRefId)
                         .ifPresent(a -> builder.adminProfile(adminMapper.toProfileDTO(a)));
                 builder.accountMutuelle(accountService.getMutuelleGlobalAccount());
+            } else if (authUser.getRole() == Role.PRESIDENT
+                    || authUser.getRole() == Role.TRESORIER
+                    || authUser.getRole() == Role.COMMISSAIRE_COMPTE) {
+                adminRepository.findById(userRefId)
+                        .ifPresent(a -> builder.adminProfile(adminMapper.toProfileDTO(a)));
             } else if (authUser.getRole() == Role.MEMBER) {
                 MemberResponseDTO memberResponseDTO= memberService.getCurrentMemberProfile();
                 builder.memberProfile(memberResponseDTO);
