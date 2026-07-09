@@ -80,6 +80,16 @@ public class ConfigController {
             hasChanges = true;
         }
 
+        if (request.getLoanPenaltyRatePercent() != null) {
+            current.setLoanPenaltyRatePercent(request.getLoanPenaltyRatePercent());
+            hasChanges = true;
+        }
+
+        if (request.getDefaultAgapeAmount() != null) {
+            current.setDefaultAgapeAmount(request.getDefaultAgapeAmount());
+            hasChanges = true;
+        }
+
         if (request.getLoanPenaltySessionThreshold() != null) {
             current.setLoanPenaltySessionThreshold(request.getLoanPenaltySessionThreshold());
             hasChanges = true;

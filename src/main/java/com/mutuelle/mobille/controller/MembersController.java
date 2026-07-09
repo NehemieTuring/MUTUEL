@@ -3,9 +3,9 @@ package com.mutuelle.mobille.controller;
 import com.mutuelle.mobille.dto.ApiResponseDto;
 import com.mutuelle.mobille.dto.auth.*;
 import com.mutuelle.mobille.dto.member.MemberMutuelleStatusUpdateDTO;
+import com.mutuelle.mobille.dto.member.MemberRegistrationSetupDTO;
 import com.mutuelle.mobille.dto.member.MemberRegisterDTO;
 import com.mutuelle.mobille.dto.member.MemberResponseDTO;
-import com.mutuelle.mobille.dto.member.MemberStatusUpdateDTO;
 import com.mutuelle.mobille.dto.member.MemberUpdateDTO;
 import com.mutuelle.mobille.service.AuthService;
 import com.mutuelle.mobille.service.MemberService;
@@ -144,10 +144,20 @@ public class MembersController {
         return ResponseEntity.ok(ApiResponseDto.ok(member, "Membre trouvé"));
     }
 
+    @PutMapping("/{id}/registration-setup")
+    @PreAuthorize("hasRole('ADMIN')")
+    @Operation(summary = "Configurer l'inscription historique d'un membre (date + montant déjà payé)")
+    public ResponseEntity<ApiResponseDto<MemberResponseDTO>> setupRegistration(
+            @PathVariable Long id,
+            @Valid @RequestBody MemberRegistrationSetupDTO dto) {
+        MemberResponseDTO updated = memberService.setupRegistration(id, dto);
+        return ResponseEntity.ok(ApiResponseDto.ok(updated, "Configuration d'inscription enregistrée"));
+    }
+
     @PatchMapping("/{id}/mutuelle-status")
     @PreAuthorize("hasRole('ADMIN')")
     @Operation(
-            summary = "Changer le statut mutuelle d'un membre (ACTIF, INSOLVABLE, INACTIF)",
+            summary = "Changer le statut mutuelle d'un membre (ACTIF, NON_A_JOUR, INACTIF)",
             description = "Permet à l'admin de forcer manuellement le statut mutuelle d'un membre."
     )
     public ResponseEntity<ApiResponseDto<MemberResponseDTO>> changeMemberMutuelleStatus(
@@ -159,27 +169,5 @@ public class MembersController {
         String message = "Statut du membre changé en " + dto.getStatus().name();
 
         return ResponseEntity.ok(ApiResponseDto.ok(updatedMember, message));
-    }
-
-    @PatchMapping("/{id}/status")
-    @PreAuthorize("hasRole('ADMIN')")
-    @Operation(
-            summary = "Activer ou désactiver un membre",
-            description = "Change le statut actif/inactif du membre et de son compte associé. " +
-                    "Seul un administrateur peut effectuer cette action."
-    )
-    public ResponseEntity<ApiResponseDto<MemberResponseDTO>> toggleMemberStatus(
-            @PathVariable Long id,
-            @RequestBody @Valid MemberStatusUpdateDTO statusDto) {
-
-        MemberResponseDTO updatedMember = memberService.toggleMemberStatus(id, statusDto.getActive());
-
-        String message = statusDto.getActive()
-                ? "Membre activé avec succès"
-                : "Membre désactivé avec succès";
-
-        return ResponseEntity.ok(
-                ApiResponseDto.ok(updatedMember, message)
-        );
     }
 }

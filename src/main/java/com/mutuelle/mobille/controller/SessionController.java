@@ -1,6 +1,7 @@
 package com.mutuelle.mobille.controller;
 
 import com.mutuelle.mobille.dto.ApiResponseDto;
+import com.mutuelle.mobille.dto.session.CloseSessionDTO;
 import com.mutuelle.mobille.dto.session.SessionRequestDTO;
 import com.mutuelle.mobille.dto.session.SessionResponseDTO;
 import com.mutuelle.mobille.dto.session.UpdateSessionRequestDTO;
@@ -76,8 +77,11 @@ public class SessionController {
     @PostMapping("/{id}/close")
     @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Clôturer une session")
-    public ResponseEntity<ApiResponseDto<SessionResponseDTO>> closeSession(@PathVariable Long id) {
-        SessionResponseDTO response = sessionService.closeSession(id);
+    public ResponseEntity<ApiResponseDto<SessionResponseDTO>> closeSession(
+            @PathVariable Long id,
+            @RequestBody(required = false) CloseSessionDTO request) {
+        Boolean deductAgape = request != null ? request.getDeductAgape() : false;
+        SessionResponseDTO response = sessionService.closeSession(id, deductAgape);
         return ResponseEntity.ok(ApiResponseDto.ok(response, "Session clôturée avec succès"));
     }
 

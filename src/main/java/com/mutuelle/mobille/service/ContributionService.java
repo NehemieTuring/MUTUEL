@@ -23,6 +23,7 @@ public class ContributionService {
     private final SessionService sessionService;
     private final TransactionRepository transactionRepository;
     private final MemberService memberService;
+    private final MemberComplianceService memberComplianceService;
 
     @Transactional
     public ContributionPaymentResponseDto processContributionPayment(ContributionPaymentRequestDto request) {
@@ -47,6 +48,13 @@ public class ContributionService {
             throw new IllegalStateException("Le membre n'a plus de " + contributionName + " impayés");
         }
 
+        if (type == TransactionType.INSCRIPTION) {
+            if (!memberComplianceService.isRegistrationConfigured(memberAccount)) {
+                throw new IllegalStateException(
+                        "L'inscription n'est pas configurée. Renseignez d'abord la date et le montant historique payé.");
+            }
+        }
+
         // L'inscription doit être payée en totalité (pas de paiement partiel)
         if (type == TransactionType.INSCRIPTION && amount.compareTo(unpaidBefore) != 0) {
             throw new IllegalArgumentException(
@@ -65,11 +73,17 @@ public class ContributionService {
         AccountService.RenfoulementSplit split = null;
         switch (type) {
             case INSCRIPTION -> accountService.payFeeInscriptionAmount(memberId, amount);
-            case RENFOULEMENT -> split = accountService.payRenfoulementAmount(memberId, amount);
+            case RENFOULEMENT -> {
+                int sessionsBefore = memberAccount.getSessionsInNonAJour();
+                split = accountService.payRenfoulementAmount(memberId, amount);
+                if (sessionsBefore >= 4) {
+                    memberComplianceService.onLateRenfoulementPaid(memberAccount);
+                }
+            }
             default -> throw new IllegalArgumentException("Type non supporté");
         }
 
-        // Mettre à jour le statut du membre après modification des dettes
+        memberComplianceService.onDebtCleared(memberAccount);
         memberService.updateMemberStatus(memberAccount);
 
         BigDecimal remaining = unpaidBefore.subtract(amount);

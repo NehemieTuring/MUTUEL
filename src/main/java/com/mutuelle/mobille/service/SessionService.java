@@ -49,6 +49,10 @@ public class SessionService {
     @Autowired
     private EmpruntService empruntService;
 
+    @Lazy
+    @Autowired
+    private MemberComplianceService memberComplianceService;
+
 //    private final Clock clock;  // ← à injecter (configurable pour les tests)
 
     private LocalDateTime now() {
@@ -270,8 +274,8 @@ public class SessionService {
             throw new IllegalArgumentException("Le montant de solidarité doit être strictement positif");
         }*/
 
-        if (dto.getAgapeAmountPerMember() != null && dto.getAgapeAmountPerMember().compareTo(BigDecimal.ZERO) <= 0) {
-            throw new IllegalArgumentException("Le montant de l'agape par membre doit être strictement positif");
+        if (dto.getAgapeAmountPerMember() != null && dto.getAgapeAmountPerMember().compareTo(BigDecimal.ZERO) < 0) {
+            throw new IllegalArgumentException("Le montant de l'agape ne peut pas être négatif");
         }
 
         /*/  Vérifier si la session a des transactions
@@ -464,17 +468,22 @@ public class SessionService {
         }
     }*/}
 
-    //Cloture manuelle
     @Transactional
     @PreAuthorize("hasRole('ADMIN')")
     public SessionResponseDTO closeSession(Long sessionId) {
+        return closeSession(sessionId, false);
+    }
+
+    @Transactional
+    @PreAuthorize("hasRole('ADMIN')")
+    public SessionResponseDTO closeSession(Long sessionId, Boolean deductAgape) {
         Session session = sessionRepository.findById(sessionId)
                 .orElseThrow(() -> new RuntimeException("Session non trouvée : " + sessionId));
 
         validateSessionForClose(session);
 
         try {
-            onSessionEnded(session); // risque d'exception caisse insuffisante
+            onSessionEnded(session, Boolean.TRUE.equals(deductAgape));
             session.setEndDate(LocalDateTime.now());
             session.setStatus(StatusSession.COMPLETED);
             session = sessionRepository.save(session);
@@ -482,13 +491,12 @@ public class SessionService {
 
             return toResponseDTO(session);
         } catch (IllegalArgumentException e) {
-            // Ici pas besoin de remettre IN_PROGRESS, transaction rollbackera
             notificationHelper.notifyAdminCritical(
                     "Échec clôture session " + session.getName(),
-                    "Impossible de clôturer - caisse solidarité insuffisante",
+                    "Impossible de clôturer la session",
                     e
             );
-            throw e; // relance l'exception
+            throw e;
         }
     }
 
@@ -528,6 +536,11 @@ public class SessionService {
 
     @Transactional
     public void onSessionEnded(Session session) {
+        onSessionEnded(session, false);
+    }
+
+    @Transactional
+    public void onSessionEnded(Session session, boolean deductAgape) {
         if (session.getHistory() != null) return;
 
         // Redistribuer les intérêts accumulés à l'octroi des prêts pendant cette session
@@ -557,40 +570,46 @@ public class SessionService {
         AccountMutuelle mutuelleacc = accountService.getMutuelleGlobalAccount();
         Long sessionId = session.getId();
 
-        // Débit des agapes
-        BigDecimal agapeAmount = session.getAgapeAmountPerMember();
-        BigDecimal currentRegistrationBalance = mutuelleacc.getRegistrationAmount();
+        BigDecimal agapeAmount = BigDecimal.ZERO;
+        if (deductAgape) {
+            agapeAmount = session.getAgapeAmountPerMember() != null
+                    ? session.getAgapeAmountPerMember() : BigDecimal.ZERO;
 
-        if (currentRegistrationBalance.compareTo(agapeAmount) < 0) {
-            throw new IllegalArgumentException(
-                    String.format(
-                            "Impossible de débiter les agapes pour la session '%s' : " +
-                                    "caisse inscription insuffisante.\n" +
-                                    "→ Montant requis : %s\n" +
-                                    "→ Solde actuel  : %s\n" +
-                                    "→ Écart         : %s\n",
-                            session.getName(),
-                            agapeAmount,
-                            currentRegistrationBalance,
-                            agapeAmount.subtract(currentRegistrationBalance)
-                    )
-            );
+            if (agapeAmount.compareTo(BigDecimal.ZERO) > 0) {
+                BigDecimal currentRegistrationBalance = mutuelleacc.getRegistrationAmount();
+                if (currentRegistrationBalance.compareTo(agapeAmount) < 0) {
+                    throw new IllegalArgumentException(
+                            String.format(
+                                    "Impossible de débiter les agapes pour la session '%s' : " +
+                                            "caisse inscription insuffisante.\n" +
+                                            "→ Montant requis : %s\n" +
+                                            "→ Solde actuel  : %s\n" +
+                                            "→ Écart         : %s\n",
+                                    session.getName(),
+                                    agapeAmount,
+                                    currentRegistrationBalance,
+                                    agapeAmount.subtract(currentRegistrationBalance)
+                            )
+                    );
+                }
+
+                accountService.removeToRegistrationMutuelleCaisse(agapeAmount);
+
+                Transaction tx = Transaction.builder()
+                        .transactionType(TransactionType.AGAPE)
+                        .amount(agapeAmount)
+                        .description("Agapes session " + session.getName())
+                        .transactionDirection(TransactionDirection.DEBIT)
+                        .accountMember(null)
+                        .session(session)
+                        .build();
+                transactionRepository.save(tx);
+
+                mutuelleacc = accountService.getMutuelleGlobalAccount();
+            }
         }
 
-        accountService.removeToRegistrationMutuelleCaisse(agapeAmount);
-
-        Transaction tx = Transaction.builder()
-                .transactionType(TransactionType.AGAPE)
-                .amount(agapeAmount)
-                .description("Agapes session " + session.getName())
-                .transactionDirection(TransactionDirection.DEBIT)
-                .accountMember(null)
-                .session(session)
-                .build();
-        transactionRepository.save(tx); 
-
-        // Recharger le compte mutuelle après le débit agape
-        mutuelleacc = accountService.getMutuelleGlobalAccount();
+        memberComplianceService.onSessionClosed(session);
 
         // Agrégation des transactions de la session
         BigDecimal totalSolidarityCollected  = transactionRepository.sumBySessionAndTypeAndDirection(sessionId, TransactionType.SOLIDARITE,     TransactionDirection.CREDIT);

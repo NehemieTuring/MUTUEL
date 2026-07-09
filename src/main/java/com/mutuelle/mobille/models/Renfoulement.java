@@ -41,6 +41,10 @@ public class Renfoulement {
     @Column(name = "agape_amount", precision = 15, scale = 2, nullable = false)
     private BigDecimal agapeAmount = BigDecimal.ZERO;
 
+    // Total des frais de gestion (retraits SG) sur la caisse inscription durant l'exercice
+    @Column(name = "management_fees_amount", precision = 15, scale = 2, nullable = false)
+    private BigDecimal managementFeesAmount = BigDecimal.ZERO;
+
     // Compteur mis à jour à chaque paiement : montant renfoulement déjà versé en Caisse Inscription
     @Column(name = "renfoulement_collected_for_inscription", precision = 15, scale = 2, nullable = false)
     private BigDecimal renfoulementCollectedForInscription = BigDecimal.ZERO;

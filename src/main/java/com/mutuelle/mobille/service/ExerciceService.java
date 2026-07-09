@@ -42,6 +42,7 @@ public class ExerciceService {
     private final RenfoulementRepository renfoulementRepository;
     private final BilanService bilanService;
     private final MemberService memberService;
+    private final MemberComplianceService memberComplianceService;
 
 
     private LocalDateTime now() {
@@ -457,7 +458,13 @@ public class ExerciceService {
             return;
         }
 
-        // 1. Calcul du total à répartir
+        // Pas de renflouement au premier exercice (solidarité uniquement)
+        if (exerciceHistoryRepository.count() <= 1) {
+            log.info("Premier exercice clôturé : pas de renfoulement (à partir du 2e exercice)");
+            return;
+        }
+
+        // 1. Calcul du total à répartir (exercice en cours uniquement)
         BigDecimal totalAssistances = history.getTotalAssistanceAmount() != null
                 ? history.getTotalAssistanceAmount()
                 : BigDecimal.ZERO;
@@ -466,26 +473,28 @@ public class ExerciceService {
                 ? history.getTotalAgapeAmount()
                 : BigDecimal.ZERO;
 
-        BigDecimal totalADistribuer = totalAssistances.add(totalAgapes);
+        BigDecimal totalFraisGestion = transactionRepository.sumByExerciceAndTypeAndDirection(
+                exercice.getId(), TransactionType.FRAIS_GESTION, TransactionDirection.DEBIT);
+        if (totalFraisGestion == null) {
+            totalFraisGestion = BigDecimal.ZERO;
+        }
+
+        BigDecimal totalADistribuer = totalAssistances.add(totalAgapes).add(totalFraisGestion);
 
         if (totalADistribuer.compareTo(BigDecimal.ZERO) <= 0) {
             log.info("Aucun renfoulement à calculer pour l'exercice {} (total = 0)", exercice.getId());
             return;
         }
 
-        // 2. Membres à jour (ceux qui servent de base au calcul du montant unitaire)
+        // 2. Membres à jour (inscription + solidarité + renflouement soldés)
         List<AccountMember> comptesAJour = memberRepository.findAllActiveWithAccount().stream()
                 .map(Member::getAccountMember)
-                .filter(compte -> compte != null
-                        && compte.getUnpaidRegistrationAmount().compareTo(BigDecimal.ZERO) == 0
-                        && compte.getUnpaidSolidarityAmount().compareTo(BigDecimal.ZERO) == 0)
+                .filter(memberComplianceService::isMemberAJourForRenfoulement)
                 .toList();
 
         int nbMembresAJour = comptesAJour.size();
         if (nbMembresAJour == 0) {
-            nbMembresAJour=1;
-//            log.warn("Aucun membre à jour   impossible de calculer le renfoulement pour l'exercice {}", exercice.getId());
-//            return;
+            nbMembresAJour = 1;
         }
 
         // 3. Montant unitaire de renfoulement (arrondi commercial vers le bas à la tranche de 25)
@@ -501,11 +510,13 @@ public class ExerciceService {
             return;
         }
 
-        // 4. Tous les membres actifs (ceux qui vont recevoir la dette)
-        List<Member> membresActifs = memberRepository.findByIsActiveTrue();
+        // 4. Membres internes (hors non-inscrits) — dette cumulée
+        List<Member> membresConcernes = memberRepository.findAllActiveWithAccount().stream()
+                .filter(memberComplianceService::isEligibleForRenfoulementAssignment)
+                .toList();
 
-        if (membresActifs.isEmpty()) {
-            log.info("Aucun membre actif pour assigner le renfoulement");
+        if (membresConcernes.isEmpty()) {
+            log.info("Aucun membre inscrit pour assigner le renfoulement");
             return;
         }
 
@@ -525,7 +536,7 @@ public class ExerciceService {
         BigDecimal totalAttribue=BigDecimal.ZERO;
 
         // 5. Création des transactions et mise à jour des comptes
-        for (Member member : membresActifs) {
+        for (Member member : membresConcernes) {
             AccountMember compte = member.getAccountMember();
             if (compte == null) {
                 continue;
@@ -552,23 +563,25 @@ public class ExerciceService {
 
             transactionRepository.save(transaction);
             totalAttribue = totalAttribue.add(renfoulementUnitaire);
+            memberService.updateMemberStatus(compte);
         }
 
         Renfoulement renfoulement=Renfoulement.builder()
                 .baseMembersCount(nbMembresAJour)
-                .distributedMembersCount(membresActifs.size())
+                .distributedMembersCount(membresConcernes.size())
                 .totalToDistributeAmount(totalADistribuer)
                 .unitAmount(renfoulementUnitaire)
                 .exercice(exercice)
                 .expectedTotalAmount(totalAttribue)
                 .agapeAmount(totalAgapes)
+                .managementFeesAmount(totalFraisGestion)
                 .renfoulementCollectedForInscription(BigDecimal.ZERO)
                 .build();
 
         renfoulementRepository.save(renfoulement);
 
-        log.info("Renfoulement calculé pour exercice {} : {} Fcfa par membre (base : {} membres à jour), appliqué à {} membres actifs",
-                exercice.getId(), renfoulementUnitaire, nbMembresAJour, membresActifs.size());
+        log.info("Renfoulement calculé pour exercice {} : {} Fcfa par membre (base : {} membres à jour), appliqué à {} membres inscrits",
+                exercice.getId(), renfoulementUnitaire, nbMembresAJour, membresConcernes.size());
     }
 
     @Transactional

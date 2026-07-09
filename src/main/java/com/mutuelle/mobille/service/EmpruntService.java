@@ -36,6 +36,7 @@ public class EmpruntService {
     private final BorrowingCeilingService borrowingCeilingService;
     private final NotificationService notificationService;
     private final MemberService memberService;
+    private final MemberComplianceService memberComplianceService;
     private final AdminService adminService;
     private final MutuelleConfigRepository mutuelleConfigRepository;
     private final SessionRepository sessionRepository;
@@ -48,6 +49,11 @@ public class EmpruntService {
         // Blocage si inscription non payée
         if (emprunteur.getMember() != null && emprunteur.getMember().getStatus() == MemberStatus.PENDING) {
             throw new IllegalStateException("Opération refusée : ce membre n'a pas encore payé ses frais d'inscription.");
+        }
+
+        if (memberComplianceService.computeInsolvable(emprunteur)) {
+            throw new IllegalStateException(
+                    "Opération refusée : ce membre est insolvable (prêts bloqués). Réglez la solidarité et/ou le renflouement.");
         }
 
         Optional<Session> currentSessionOpt = sessionService.findCurrentSession();
@@ -323,9 +329,14 @@ public class EmpruntService {
         MutuelleConfig config = mutuelleConfigRepository.findTopByOrderByUpdatedAtDesc()
                 .orElseThrow(() -> new IllegalStateException("Configuration mutuelle introuvable"));
 
-        BigDecimal penaliteFixe = config.getLoanPenaltyFixedAmount();
-        boolean penaliteActive = penaliteFixe != null && penaliteFixe.compareTo(BigDecimal.ZERO) > 0;
-        if (!penaliteActive) return;
+        BigDecimal penaliteFixe = config.getLoanPenaltyFixedAmount() != null
+                ? config.getLoanPenaltyFixedAmount() : BigDecimal.ZERO;
+        BigDecimal penaliteRate = config.getLoanPenaltyRatePercent() != null
+                ? config.getLoanPenaltyRatePercent() : BigDecimal.ZERO;
+
+        if (penaliteFixe.compareTo(BigDecimal.ZERO) <= 0 && penaliteRate.compareTo(BigDecimal.ZERO) <= 0) {
+            return;
+        }
 
         int threshold = config.getLoanPenaltySessionThreshold() != null
                 ? config.getLoanPenaltySessionThreshold() : 3;
@@ -342,16 +353,55 @@ public class EmpruntService {
             long nbSessionsFermees = sessionRepository.countCompletedSessionsAfter(borrowSession.getStartDate());
             if (nbSessionsFermees < threshold) continue;
 
-            accountService.addBorrowAmount(membreAcc, penaliteFixe);
+            Long lastPenaltySessionId = membreAcc.getLastPenaltySessionId();
+            if (lastPenaltySessionId != null) {
+                Session lastPenaltySession = sessionRepository.findById(lastPenaltySessionId).orElse(null);
+                if (lastPenaltySession != null) {
+                    long sessionsSinceLastPenalty = sessionRepository.countCompletedSessionsAfter(
+                            lastPenaltySession.getStartDate());
+                    if (sessionsSinceLastPenalty < threshold) {
+                        continue;
+                    }
+                }
+            }
 
-            transactionRepository.save(Transaction.builder()
-                    .accountMember(membreAcc)
-                    .amount(penaliteFixe)
-                    .transactionType(TransactionType.PENALITE)
-                    .transactionDirection(TransactionDirection.DEBIT)
-                    .session(session)
-                    .description("Pénalité de retard de remboursement")
-                    .build());
+            BigDecimal borrowDebt = membreAcc.getBorrowAmount() != null
+                    ? membreAcc.getBorrowAmount() : BigDecimal.ZERO;
+            BigDecimal renfDebt = membreAcc.getUnpaidRenfoulement() != null
+                    ? membreAcc.getUnpaidRenfoulement() : BigDecimal.ZERO;
+            BigDecimal detteTotale = borrowDebt.add(renfDebt);
+
+            BigDecimal penalite = penaliteFixe.add(
+                    detteTotale.multiply(penaliteRate).divide(new BigDecimal("100"), 2, java.math.RoundingMode.HALF_UP));
+
+            if (penalite.compareTo(BigDecimal.ZERO) <= 0) continue;
+
+            AccountService.PenaltyDeductionResult result = accountService.applyPenaltyDeduction(membreAcc, penalite);
+
+            if (result.fromSavings().compareTo(BigDecimal.ZERO) > 0) {
+                transactionRepository.save(Transaction.builder()
+                        .accountMember(membreAcc)
+                        .amount(result.fromSavings())
+                        .transactionType(TransactionType.PENALITE)
+                        .transactionDirection(TransactionDirection.DEBIT)
+                        .session(session)
+                        .description("Pénalité de retard (prélèvement épargne)")
+                        .build());
+            }
+
+            if (result.addedToBorrow().compareTo(BigDecimal.ZERO) > 0) {
+                transactionRepository.save(Transaction.builder()
+                        .accountMember(membreAcc)
+                        .amount(result.addedToBorrow())
+                        .transactionType(TransactionType.PENALITE)
+                        .transactionDirection(TransactionDirection.DEBIT)
+                        .session(session)
+                        .description("Pénalité de retard (reliquat ajouté à la dette de prêt)")
+                        .build());
+            }
+
+            membreAcc.setLastPenaltySessionId(session.getId());
+            accountService.saveMemberAccount(membreAcc);
         }
     }
 

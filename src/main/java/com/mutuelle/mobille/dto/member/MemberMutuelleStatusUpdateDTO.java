@@ -7,6 +7,6 @@ import lombok.Data;
 @Data
 public class MemberMutuelleStatusUpdateDTO {
 
-    @NotNull(message = "Le statut est obligatoire (ACTIF, INSOLVABLE, INACTIF)")
+    @NotNull(message = "Le statut est obligatoire (ACTIF, NON_A_JOUR, INACTIF)")
     private MemberStatus status;
 }

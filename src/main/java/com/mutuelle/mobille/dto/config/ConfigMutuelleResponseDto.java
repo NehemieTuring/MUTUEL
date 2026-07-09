@@ -16,6 +16,8 @@ public class ConfigMutuelleResponseDto {
     private BigDecimal solidarityFeeAmount;
     private BigDecimal loanInterestRatePercent;
     private BigDecimal loanPenaltyFixedAmount;
+    private BigDecimal loanPenaltyRatePercent;
+    private BigDecimal defaultAgapeAmount;
     private Integer loanPenaltySessionThreshold;
     private BigDecimal insolvencyThreshold;
     private LocalDateTime updatedAt;
@@ -27,6 +29,8 @@ public class ConfigMutuelleResponseDto {
         this.solidarityFeeAmount = config.getSolidarityFeeAmount();
         this.loanInterestRatePercent = config.getLoanInterestRatePercent();
         this.loanPenaltyFixedAmount = config.getLoanPenaltyFixedAmount();
+        this.loanPenaltyRatePercent = config.getLoanPenaltyRatePercent();
+        this.defaultAgapeAmount = config.getDefaultAgapeAmount();
         this.loanPenaltySessionThreshold = config.getLoanPenaltySessionThreshold();
         this.insolvencyThreshold = config.getInsolvencyThreshold();
         this.updatedAt = config.getUpdatedAt();

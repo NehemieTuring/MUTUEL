@@ -22,4 +22,7 @@ public class LoginResponseDto {
 
     // Profils typés (un seul sera non-null)
     private Object profile;
+
+    private Boolean insolvable;
+    private Boolean assistanceBlocked;
 }

@@ -12,5 +12,6 @@ public enum TransactionType {
     INTERET,
     ASSISTANCE,
     AGAPE,
-    PENALITE
+    PENALITE,
+    FRAIS_GESTION
 }

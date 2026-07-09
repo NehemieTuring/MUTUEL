@@ -30,6 +30,14 @@ public class ConfigMutuelleRequestDto {
     @Digits(integer = 12, fraction = 2, message = "Format invalide")
     private BigDecimal loanPenaltyFixedAmount;
 
+    @DecimalMin(value = "0.0", inclusive = true, message = "Le taux de pénalité ne peut pas être négatif")
+    @Digits(integer = 3, fraction = 2, message = "Format du taux invalide")
+    private BigDecimal loanPenaltyRatePercent;
+
+    @DecimalMin(value = "0.0", inclusive = true, message = "Le montant agape par défaut ne peut pas être négatif")
+    @Digits(integer = 12, fraction = 2, message = "Format invalide")
+    private BigDecimal defaultAgapeAmount;
+
     @Min(value = 1, message = "Le seuil de sessions doit être d'au moins 1")
     private Integer loanPenaltySessionThreshold;
 

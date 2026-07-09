@@ -1,8 +1,8 @@
 package com.mutuelle.mobille.enums;
 
 public enum MemberStatus {
-    PENDING,        // Inscription non payée — membre en attente d'entrée dans la mutuelle
-    ACTIF,          // En règle (inscription payée, pas de dette de solidarité ni renflouement)
-    INSOLVABLE,     // Non en règle mais dette < seuil
-    INACTIF         // Non en règle et dette >= seuil
+    PENDING,        // Non inscrit — complément d'inscription non payé
+    ACTIF,          // À jour — inscription soldée, pas de dette solidarité ni renflouement
+    NON_A_JOUR,     // Non à jour — dette solidarité et/ou renflouement < seuil inactivité
+    INACTIF         // Inactif — dette solidarité + renflouement >= seuil (250 000 FCFA)
 }

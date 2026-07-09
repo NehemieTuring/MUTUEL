@@ -14,6 +14,7 @@ public class RenfoulementSimulationDto {
     private BigDecimal estimatedUnitAmount;
     private int estimatedDistributedMembersCount;
     private BigDecimal estimatedExpectedTotalAmount;
+    private BigDecimal estimatedManagementFeesAmount;
     private Boolean isPossible;
     private String message;
 }

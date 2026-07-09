@@ -7,6 +7,7 @@ import jakarta.validation.constraints.DecimalMin;
 import lombok.*;
 
 import java.math.BigDecimal;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 @Entity
@@ -65,6 +66,27 @@ public class AccountMember {
     // Session dans laquelle l'emprunt courant a été accordé (pour calcul pénalité)
     @Column(name = "borrow_session_id")
     private Long borrowSessionId;
+
+    @Column(name = "first_registration_date")
+    private LocalDate firstRegistrationDate;
+
+    @Column(name = "historical_registration_paid", precision = 12, scale = 2)
+    private BigDecimal historicalRegistrationPaid;
+
+    @Builder.Default
+    @Column(name = "registration_configured", nullable = false)
+    private boolean registrationConfigured = false;
+
+    @Builder.Default
+    @Column(name = "sessions_in_non_a_jour", nullable = false)
+    private int sessionsInNonAJour = 0;
+
+    @Column(name = "last_penalty_session_id")
+    private Long lastPenaltySessionId;
+
+    @Builder.Default
+    @Column(name = "assistance_blocked_sessions_remaining", nullable = false)
+    private int assistanceBlockedSessionsRemaining = 0;
 
     @Column(name = "is_active")
     private boolean isActive = true;

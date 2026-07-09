@@ -37,6 +37,7 @@ public class AssistanceService {
     private final AccountMutuelleRepository accountMutuelleRepository;
     private final AssistanceMapper assistanceMapper;
     private final SessionNotificationHelper notificationHelper;
+    private final MemberComplianceService memberComplianceService;
 
     // Récupérer tous les types d'assistance
     @Transactional(readOnly = true)
@@ -82,6 +83,13 @@ public class AssistanceService {
         // Vérifier que le membre est en règle (inscription + solidarité + renflouement)
         var account = member.getAccountMember();
         if (account != null) {
+            if (memberComplianceService.computeAssistanceBlocked(account)) {
+                throw new IllegalStateException(
+                        "Demande refusée : vous devez attendre "
+                                + account.getAssistanceBlockedSessionsRemaining()
+                                + " session(s) supplémentaire(s) après un paiement tardif de renflouement.");
+            }
+
             java.math.BigDecimal zero = java.math.BigDecimal.ZERO;
 
             if (account.getUnpaidRegistrationAmount() != null &&

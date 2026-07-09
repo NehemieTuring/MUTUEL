@@ -30,12 +30,23 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 @Service
 @RequiredArgsConstructor
 public class MemberService {
 
+    private static final Set<String> STAFF_AUTH_EMAILS = Set.of(
+            "superadmin@mutuelle.com",
+            "admin@mutuelle.com",
+            "president@mutuelle.com",
+            "tresorier@mutuelle.com",
+            "cac@mutuelle.com",
+            "secretaire@mutuelle.com"
+    );
+
     private final @Lazy MutuelleConfigService mutuelleConfigService;
+    private final MemberComplianceService memberComplianceService;
     private final MemberRepository memberRepository;
     private final AuthUserRepository authUserRepository;
     private final PasswordEncoder passwordEncoder;
@@ -62,6 +73,9 @@ public class MemberService {
                 .borrowAmount(BigDecimal.ZERO)
                 .unpaidRenfoulement(BigDecimal.ZERO)
                 .unpaidSolidarityAmount(config.getSolidarityFeeAmount())
+                .registrationConfigured(false)
+                .sessionsInNonAJour(0)
+                .assistanceBlockedSessionsRemaining(0)
                 .isActive(true)
                 .build();
 
@@ -129,14 +143,17 @@ public class MemberService {
     // ===========================================================================
     public MemberResponseDTO toResponseDTO(Member member) {
         AccountMember accountMember = member.getAccountMember();
-        AuthUser authUser = authUserRepository.findByUserRefIdAndRole(member.getId(), Role.MEMBER)
-                .orElse(null);
+        AuthUser authUser = resolveMemberAuthUser(member.getId()).orElse(null);
 
         String email = authUser != null ? authUser.getEmail() : null;
         Role role = authUser != null ? authUser.getRole() : null;
 
+        boolean insolvable = memberComplianceService.computeInsolvable(accountMember);
+        int sessionsBeforeLoanBlock = memberComplianceService.computeSessionsBeforeLoanBlock(accountMember);
+        boolean assistanceBlocked = memberComplianceService.computeAssistanceBlocked(accountMember);
+
         return new MemberResponseDTO(
-                authUser.getId(),
+                authUser != null ? authUser.getId() : null,
                 member.getId(),
                 member.getFirstname(),
                 member.getLastname(),
@@ -148,12 +165,21 @@ public class MemberService {
                 accountMember.getUnpaidRegistrationAmount(),
                 accountMember.getBaseRegistrationAmount(),
                 accountMember.getSolidarityAmount(),
+                accountMember.getUnpaidSolidarityAmount(),
                 accountMember.getBorrowAmount(),
                 accountMember.getUnpaidRenfoulement(),
                 accountMember.getSavingAmount(),
                 accountMember.getId(),
                 member.getPin(),
                 member.getStatus(),
+                memberComplianceService.computeStatusLabel(member.getStatus()),
+                accountMember.getFirstRegistrationDate(),
+                accountMember.getHistoricalRegistrationPaid(),
+                accountMember.isRegistrationConfigured(),
+                insolvable,
+                sessionsBeforeLoanBlock,
+                assistanceBlocked,
+                accountMember.getAssistanceBlockedSessionsRemaining(),
                 member.getCreatedAt(),
                 member.getUpdatedAt()
         );
@@ -263,7 +289,7 @@ public class MemberService {
         Member member = memberRepository.findById(memberId)
                 .orElseThrow(() -> new IllegalStateException("Membre introuvable"));
 
-        AuthUser authUser = authUserRepository.findByUserRefIdAndRole(memberId, Role.MEMBER)
+        AuthUser authUser = resolveMemberAuthUser(memberId)
                 .orElseThrow(() -> new IllegalStateException("Utilisateur d'authentification introuvable"));
 
         // Vérification ancien PIN
@@ -289,7 +315,7 @@ public class MemberService {
     public void updatePassword(PasswordUpdateDTO dto) {
         Long memberId = SecurityUtil.getCurrentUserRefId();
 
-        AuthUser authUser = authUserRepository.findByUserRefIdAndRole(memberId, Role.MEMBER)
+        AuthUser authUser = resolveMemberAuthUser(memberId)
                 .orElseThrow(() -> new IllegalStateException("Utilisateur introuvable"));
 
         // Vérification mot de passe actuel
@@ -311,7 +337,7 @@ public class MemberService {
     @Transactional
     public MemberResponseDTO updateEmail(EmailUpdateDTO dto) {
         Long memberId = SecurityUtil.getCurrentUserRefId();
-        AuthUser authUser = authUserRepository.findByUserRefIdAndRole(memberId, Role.MEMBER)
+        AuthUser authUser = resolveMemberAuthUser(memberId)
                 .orElseThrow();
 
         if (!passwordEncoder.matches(dto.getPassword(), authUser.getPasswordHash())) {
@@ -332,11 +358,7 @@ public class MemberService {
     }
 
     /**
-     * Vérifie si un membre est à jour : a payé tous les frais d'inscription et la solidarité.
-     * (unpaidRegistrationAmount == 0 && unpaidSolidarityAmount == 0)
-     *
-     * @param memberId L'ID du membre à vérifier
-     * @return true si le membre est à jour, false sinon
+     * Vérifie si un membre est à jour : inscription, solidarité et renflouement soldés.
      */
     @Transactional(readOnly = true)
     public boolean isMemberAJour(Long memberId) {
@@ -345,13 +367,34 @@ public class MemberService {
             throw new IllegalArgumentException("Membre non trouvé avec l'ID : " + memberId);
         }
         AccountMember account = optionalMember.get().getAccountMember();
-        return account.getUnpaidRegistrationAmount().compareTo(BigDecimal.ZERO) == 0 &&
-                account.getUnpaidSolidarityAmount().compareTo(BigDecimal.ZERO) == 0;
+        return memberComplianceService.isMemberAJourForRenfoulement(account);
     }
 
 
     public Optional<AuthUser> getAuthMember(Member member) {
-        return authUserRepository.findByUserRefIdAndRole(member.getId(), Role.MEMBER);
+        return resolveMemberAuthUser(member.getId());
+    }
+
+    private Optional<AuthUser> resolveMemberAuthUser(Long memberId) {
+        List<AuthUser> authUsers = authUserRepository.findAllByUserRefId(memberId);
+        if (authUsers.isEmpty()) {
+            return Optional.empty();
+        }
+
+        Optional<AuthUser> memberAuth = authUsers.stream()
+                .filter(au -> au.getRole() == Role.MEMBER)
+                .findFirst();
+        if (memberAuth.isPresent()) {
+            return memberAuth;
+        }
+
+        return authUsers.stream()
+                .filter(au -> au.getRole() != Role.SUPER_ADMIN
+                        && au.getRole() != Role.ADMIN
+                        && au.getRole() != Role.PRESIDENT
+                        && au.getRole() != Role.TRESORIER)
+                .filter(au -> !STAFF_AUTH_EMAILS.contains(au.getEmail().toLowerCase()))
+                .findFirst();
     }
 
     @Transactional
@@ -432,10 +475,35 @@ public class MemberService {
         if (totalDebt.compareTo(BigDecimal.ZERO) == 0) {
             return MemberStatus.ACTIF;
         } else if (totalDebt.compareTo(threshold) < 0) {
-            return MemberStatus.INSOLVABLE;
+            return MemberStatus.NON_A_JOUR;
         } else {
             return MemberStatus.INACTIF;
         }
+    }
+
+    @Transactional
+    public MemberResponseDTO setupRegistration(Long memberId, com.mutuelle.mobille.dto.member.MemberRegistrationSetupDTO dto) {
+        Member member = memberRepository.findByIdWithAccount(memberId)
+                .orElseThrow(() -> new IllegalArgumentException("Membre non trouvé"));
+
+        AccountMember account = member.getAccountMember();
+        MutuelleConfig config = mutuelleConfigService.getCurrentConfig();
+
+        BigDecimal complement = config.getRegistrationFeeAmount().subtract(dto.historicalRegistrationPaid());
+        if (complement.compareTo(BigDecimal.ZERO) < 0) {
+            throw new IllegalArgumentException(
+                    "Le montant historique payé dépasse le tarif d'inscription actuel (" + config.getRegistrationFeeAmount() + " FCFA)");
+        }
+
+        account.setFirstRegistrationDate(dto.firstRegistrationDate());
+        account.setHistoricalRegistrationPaid(dto.historicalRegistrationPaid());
+        account.setUnpaidRegistrationAmount(complement);
+        account.setBaseRegistrationAmount(complement);
+        account.setRegistrationConfigured(true);
+
+        memberRepository.save(member);
+        updateMemberStatus(account);
+        return toResponseDTO(member);
     }
 
     @Transactional

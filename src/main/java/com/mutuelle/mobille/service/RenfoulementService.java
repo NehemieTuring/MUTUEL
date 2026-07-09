@@ -4,6 +4,8 @@ import com.mutuelle.mobille.dto.exercice.ExerciceResponseDTO;
 import com.mutuelle.mobille.dto.renfoulement.RenfoulementHistoryItemDto;
 import com.mutuelle.mobille.dto.renfoulement.RenfoulementHistoryResponseDto;
 import com.mutuelle.mobille.dto.renfoulement.RenfoulementSimulationDto;
+import com.mutuelle.mobille.enums.TransactionDirection;
+import com.mutuelle.mobille.enums.TransactionType;
 import com.mutuelle.mobille.mapper.AccountMemberMapper;
 import com.mutuelle.mobille.mapper.ExerciceHistoryMapper;
 import com.mutuelle.mobille.models.*;
@@ -28,9 +30,12 @@ public class RenfoulementService {
     private final MemberRepository memberRepository;
     private final RenfoulementRepository renfoulementRepository;
     private final SessionHistoryRepository sessionHistoryRepository;
+    private final ExerciceHistoryRepository exerciceHistoryRepository;
+    private final TransactionRepository transactionRepository;
     private final ExerciceService exerciceService;
     private final AccountMemberRepository accountMemberRepository;
     private final AccountMemberMapper accountMemberMapper;
+    private final MemberComplianceService memberComplianceService;
 
 
     public RenfoulementHistoryResponseDto getGlobalRenfoulementHistory( ) {
@@ -67,28 +72,43 @@ public class RenfoulementService {
 
         ExerciceResponseDTO exercice=exerciceOpt.get();
 
-        // 1. Calcul du total à répartir
+        long closedExercices = exerciceHistoryRepository.count();
+        if (closedExercices < 1) {
+            return RenfoulementSimulationDto.builder()
+                    .exerciceName(exercice.getName())
+                    .isPossible(false)
+                    .message("Le renflouement sera calculé à partir de la clôture du 2e exercice (1er exercice : solidarité uniquement)")
+                    .build();
+        }
+
+        // 1. Calcul du total à répartir (sessions clôturées + frais de gestion de l'exercice)
         List<SessionHistory> historyList = sessionHistoryRepository.findAllByExerciceId(exercice.getId());
 
-        BigDecimal totalADistribuer = historyList.stream()
+        BigDecimal totalAssistancesAgapes = historyList.stream()
                 .map(s -> s.getTotalAssistanceAmount().add(s.getAgapeAmount()))
                 .reduce(BigDecimal.ZERO, BigDecimal::add);
+
+        BigDecimal totalFraisGestion = transactionRepository.sumByExerciceAndTypeAndDirection(
+                exercice.getId(), TransactionType.FRAIS_GESTION, TransactionDirection.DEBIT);
+        if (totalFraisGestion == null) {
+            totalFraisGestion = BigDecimal.ZERO;
+        }
+
+        BigDecimal totalADistribuer = totalAssistancesAgapes.add(totalFraisGestion);
 
         if (totalADistribuer.compareTo(BigDecimal.ZERO) <= 0) {
             log.info("Aucun renfoulement à calculer pour l'exercice {} (total = 0)", exercice.getId());
             return RenfoulementSimulationDto.builder()
                     .exerciceName(exercice.getName())
                     .isPossible(false)
-                    .message("Aucun montant à répartir (pas de dépenses/assistance/agape)")
+                    .message("Aucun montant à répartir (pas de dépenses/assistance/agape/frais de gestion)")
                     .build();
         }
 
-        // 2. Membres à jour (ceux qui servent de base au calcul du montant unitaire)
+        // 2. Membres à jour (inscription + solidarité + renflouement soldés)
         List<AccountMember> comptesAJour = memberRepository.findAllActiveWithAccount().stream()
                 .map(Member::getAccountMember)
-                .filter(compte -> compte != null
-                        && compte.getUnpaidRegistrationAmount().compareTo(BigDecimal.ZERO) == 0
-                        && compte.getUnpaidSolidarityAmount().compareTo(BigDecimal.ZERO) == 0)
+                .filter(memberComplianceService::isMemberAJourForRenfoulement)
                 .toList();
 
         int nbMembresAJour = comptesAJour.size();
@@ -97,7 +117,7 @@ public class RenfoulementService {
             return RenfoulementSimulationDto.builder()
                     .exerciceName(exercice.getName())
                     .isPossible(false)
-                    .message("Auccun Membre a jours")
+                    .message("Aucun membre à jour")
                     .build();
         }
 
@@ -118,15 +138,17 @@ public class RenfoulementService {
                     .build();
         }
 
-        // 4. Tous les membres actifs (ceux qui vont recevoir la dette)
-        List<Member> membresActifs = memberRepository.findByIsActiveTrue();
+        // 4. Membres inscrits (hors PENDING)
+        List<Member> membresConcernes = memberRepository.findAllActiveWithAccount().stream()
+                .filter(memberComplianceService::isEligibleForRenfoulementAssignment)
+                .toList();
 
-        if (membresActifs.isEmpty()) {
-            log.info("Aucun membre actif pour assigner le renfoulement");
+        if (membresConcernes.isEmpty()) {
+            log.info("Aucun membre inscrit pour assigner le renfoulement");
             return RenfoulementSimulationDto.builder()
                     .exerciceName(exercice.getName())
                     .isPossible(false)
-                    .message("Aucun membre actif dans l'association")
+                    .message("Aucun membre inscrit dans l'association")
                     .build();
         }
 
@@ -134,8 +156,9 @@ public class RenfoulementService {
                 .estimatedExpectedTotalAmount(totalADistribuer)
                 .estimatedBaseMembersCount(nbMembresAJour)
                 .estimatedUnitAmount(renfoulementUnitaire)
-                .estimatedDistributedMembersCount(membresActifs.size())
+                .estimatedDistributedMembersCount(membresConcernes.size())
                 .estimatedTotalToDistributeAmount(totalADistribuer)
+                .estimatedManagementFeesAmount(totalFraisGestion)
                 .exerciceName(exercice.getName())
                 .isPossible(true)
                 .build();

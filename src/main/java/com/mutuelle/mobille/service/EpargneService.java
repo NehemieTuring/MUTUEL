@@ -45,6 +45,13 @@ public class EpargneService {
         if (direction == TransactionDirection.CREDIT) {
             accountService.addSaving(memberId, amount);
         } else if (direction == TransactionDirection.DEBIT) {
+            BigDecimal borrowAmount = memberAccount.getBorrowAmount() != null
+                    ? memberAccount.getBorrowAmount()
+                    : BigDecimal.ZERO;
+            if (borrowAmount.compareTo(BigDecimal.ZERO) > 0) {
+                throw new IllegalStateException(
+                        "Retrait impossible : ce membre a un prêt d'emprunt en cours. Remboursez-le d'abord.");
+            }
             accountService.withdrawSaving(memberId, amount);
         } else {
             throw new IllegalArgumentException("TransactionDirection invalide");

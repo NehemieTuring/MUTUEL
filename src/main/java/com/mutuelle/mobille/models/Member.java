@@ -46,7 +46,7 @@ public class Member {
     private AccountMember accountMember;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "status", columnDefinition = "VARCHAR(20) DEFAULT 'ACTIF' NOT NULL")
+    @Column(name = "status", nullable = false, length = 20)
     @Builder.Default
     private MemberStatus status = MemberStatus.ACTIF;
 

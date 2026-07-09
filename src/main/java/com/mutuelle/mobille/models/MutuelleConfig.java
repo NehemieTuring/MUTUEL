@@ -20,7 +20,7 @@ public class MutuelleConfig {
 
     // Registration / inscription fee
     @Column(name = "registration_fee_amount", nullable = false, precision = 14, scale = 2)
-    private BigDecimal registrationFeeAmount = new BigDecimal("25000.00");
+    private BigDecimal registrationFeeAmount = new BigDecimal("60000.00");
 
     // Solidarity fee (one-time contribution per member, payable in installments)
     @Column(name = "solidarity_fee_amount", nullable = false, precision = 14, scale = 2)
@@ -30,9 +30,11 @@ public class MutuelleConfig {
     @Column(name = "loan_interest_rate_percent", nullable = false, precision = 5, scale = 2)
     private BigDecimal loanInterestRatePercent = new BigDecimal("3.00");
 
-//    // Taux de pénalité de remboursement (%)
-//    @Column(name = "loan_penalty_rate_percent", nullable = false, precision = 5, scale = 2)
-//    private BigDecimal loanPenaltyRatePercent = new BigDecimal("3.00");
+    @Column(name = "loan_penalty_rate_percent", nullable = false, precision = 5, scale = 2)
+    private BigDecimal loanPenaltyRatePercent = new BigDecimal("3.00");
+
+    @Column(name = "default_agape_amount", nullable = false, precision = 14, scale = 2)
+    private BigDecimal defaultAgapeAmount = new BigDecimal("5000.00");
 
     // Forfait fixe de pénalité majorée (en FCFA)
     @Column(name = "loan_penalty_fixed_amount", nullable = false, precision = 14, scale = 2)
@@ -42,7 +44,8 @@ public class MutuelleConfig {
     @Column(name = "loan_penalty_session_threshold", nullable = false)
     private Integer loanPenaltySessionThreshold = 3;
 
-    @Column(name = "seuil_insolvabilite", columnDefinition = "NUMERIC(14,2) DEFAULT 250000.00 NOT NULL")
+    @Column(name = "seuil_insolvabilite", nullable = false, precision = 14, scale = 2)
+    @Builder.Default
     private BigDecimal insolvencyThreshold = new BigDecimal("250000.00");
 
     @Column(name = "updated_at", nullable = false)

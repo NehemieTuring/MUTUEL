@@ -6,6 +6,7 @@ import com.mutuelle.mobille.mapper.AdminMapper;
 import com.mutuelle.mobille.mapper.MemberMapper;
 import com.mutuelle.mobille.models.Admin;
 import com.mutuelle.mobille.models.Member;
+import com.mutuelle.mobille.models.account.AccountMember;
 import com.mutuelle.mobille.models.auth.AuthUser;
 import com.mutuelle.mobille.models.auth.RefreshToken;
 import com.mutuelle.mobille.repository.*;
@@ -44,6 +45,7 @@ public class AuthService {
     private final MemberMapper memberMapper;
     private final AdminMapper adminMapper;
     private final MutuelleConfigService mutuelleConfigService;
+    private final MemberComplianceService memberComplianceService;
 
     public LoginResponseDto login(String email, String password) {
         AuthUser authUser = authUserRepo.findByEmail(email)
@@ -64,14 +66,24 @@ public class AuthService {
             }
             // Blocage pour inscription non payée
             if (member.getStatus() == MemberStatus.PENDING) {
-                throw new AccountDisabledException("Inscription non payée. Veuillez contacter votre secrétaire générale.");
+                throw new AccountDisabledException("Non inscrit : complément d'inscription non payé. Veuillez contacter votre secrétaire générale.");
             }
             // Blocage pour dette excessive
             if (member.getStatus() == MemberStatus.INACTIF) {
                 BigDecimal seuil = mutuelleConfigService.getCurrentConfig().getInsolvencyThreshold();
                 throw new AccountInactiveException("Compte inactif : dette ≥ " + seuil + " FCFA");
             }
-            // Les membres INSOLVABLE peuvent se connecter (afficher un avertissement plus tard)
+            // Les membres NON_A_JOUR peuvent se connecter (avertissement insolvabilité dans la réponse)
+        }
+
+        final boolean[] memberFlags = {false, false};
+        if (authUser.getRole() == Role.MEMBER) {
+            Member memberForFlags = memberRepo.findById(authUser.getUserRefId()).orElse(null);
+            if (memberForFlags != null && memberForFlags.getAccountMember() != null) {
+                AccountMember acc = memberForFlags.getAccountMember();
+                memberFlags[0] = memberComplianceService.computeInsolvable(acc);
+                memberFlags[1] = memberComplianceService.computeAssistanceBlocked(acc);
+            }
         }
 
         String accessToken = jwtUtils.generateAccessToken(authUser);
@@ -107,6 +119,8 @@ public class AuthService {
                 .email(authUser.getEmail())
                 .refreshToken(refreshTokenValue)
                 .profile(profile)
+                .insolvable(memberFlags[0])
+                .assistanceBlocked(memberFlags[1])
                 .build();
     }
 

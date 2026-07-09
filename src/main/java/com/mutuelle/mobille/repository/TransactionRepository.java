@@ -148,6 +148,14 @@ public interface TransactionRepository extends JpaRepository<Transaction, Long>,
     @Query("SELECT COALESCE(SUM(t.amount), 0) FROM Transaction t WHERE t.transactionType = :type")
     BigDecimal sumAmountByType(@Param("type") TransactionType type);
 
+    @Query("SELECT t FROM Transaction t WHERE t.session.exercice.id = :exerciceId " +
+           "AND t.transactionType = :type AND t.transactionDirection = :direction " +
+           "ORDER BY t.createdAt ASC")
+    List<Transaction> findByExerciceIdAndTypeAndDirection(
+            @Param("exerciceId") Long exerciceId,
+            @Param("type") TransactionType type,
+            @Param("direction") TransactionDirection direction);
+
     // ── Requêtes pour rollback de réouverture de session ─────────────────────
 
     @Query("SELECT t FROM Transaction t WHERE t.session.id = :sessionId " +

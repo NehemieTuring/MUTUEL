@@ -33,11 +33,13 @@ public class MutuelleConfigService {
     public void initDefaultConfig() {
         if (configRepository.count() == 0) {
             MutuelleConfig defaultConfig = MutuelleConfig.builder()
-                    .registrationFeeAmount(new BigDecimal("15000.00"))
+                    .registrationFeeAmount(new BigDecimal("60000.00"))
                     .solidarityFeeAmount(new BigDecimal("150000.00"))
                     .loanInterestRatePercent(new BigDecimal("3.00"))
                     .loanPenaltySessionThreshold(3)
                     .loanPenaltyFixedAmount(new BigDecimal("15000.00"))
+                    .loanPenaltyRatePercent(new BigDecimal("3.00"))
+                    .defaultAgapeAmount(new BigDecimal("5000.00"))
                     .insolvencyThreshold(new BigDecimal("250000.00"))
                     .updatedBy("system")
                     .build();
@@ -66,6 +68,10 @@ public class MutuelleConfigService {
             config.setLoanInterestRatePercent(updatedConfig.getLoanInterestRatePercent());
         if (updatedConfig.getLoanPenaltyFixedAmount() != null)
             config.setLoanPenaltyFixedAmount(updatedConfig.getLoanPenaltyFixedAmount());
+        if (updatedConfig.getLoanPenaltyRatePercent() != null)
+            config.setLoanPenaltyRatePercent(updatedConfig.getLoanPenaltyRatePercent());
+        if (updatedConfig.getDefaultAgapeAmount() != null)
+            config.setDefaultAgapeAmount(updatedConfig.getDefaultAgapeAmount());
         if (updatedConfig.getLoanPenaltySessionThreshold() != null)
             config.setLoanPenaltySessionThreshold(updatedConfig.getLoanPenaltySessionThreshold());
         if (updatedConfig.getInsolvencyThreshold() != null) {

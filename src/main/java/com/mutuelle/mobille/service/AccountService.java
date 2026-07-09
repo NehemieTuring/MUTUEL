@@ -100,6 +100,42 @@
             globalRepo.save(globalAccount);
         }
 
+        public record PenaltyDeductionResult(BigDecimal fromSavings, BigDecimal addedToBorrow) {}
+
+        /**
+         * Prélève une pénalité sur l'épargne ; le reliquat est ajouté à la dette de prêt.
+         */
+        @Transactional
+        public PenaltyDeductionResult applyPenaltyDeduction(AccountMember accountMember, BigDecimal penaltyAmount) {
+            if (penaltyAmount == null || penaltyAmount.compareTo(BigDecimal.ZERO) <= 0) {
+                return new PenaltyDeductionResult(BigDecimal.ZERO, BigDecimal.ZERO);
+            }
+
+            AccountMutuelle globalAccount = getMutuelleGlobalAccount();
+            BigDecimal savings = accountMember.getSavingAmount() != null
+                    ? accountMember.getSavingAmount() : BigDecimal.ZERO;
+
+            BigDecimal fromSavings = savings.min(penaltyAmount);
+            BigDecimal addedToBorrow = penaltyAmount.subtract(fromSavings);
+
+            if (fromSavings.compareTo(BigDecimal.ZERO) > 0) {
+                accountMember.setSavingAmount(savings.subtract(fromSavings));
+                globalAccount.setSavingAmount(globalAccount.getSavingAmount().subtract(fromSavings));
+            }
+
+            if (addedToBorrow.compareTo(BigDecimal.ZERO) > 0) {
+                BigDecimal currentBorrow = accountMember.getBorrowAmount() != null
+                        ? accountMember.getBorrowAmount() : BigDecimal.ZERO;
+                accountMember.setBorrowAmount(currentBorrow.add(addedToBorrow));
+                globalAccount.setBorrowAmount(globalAccount.getBorrowAmount().add(addedToBorrow));
+            }
+
+            memberRepo.save(accountMember);
+            globalRepo.save(globalAccount);
+
+            return new PenaltyDeductionResult(fromSavings, addedToBorrow);
+        }
+
 
         /**
          * Un membre fait une épargne
@@ -440,6 +476,8 @@
                 if (restant.compareTo(BigDecimal.ZERO) <= 0) break;
 
                 BigDecimal capacite = renfoulement.getAgapeAmount()
+                        .add(renfoulement.getManagementFeesAmount() != null
+                                ? renfoulement.getManagementFeesAmount() : BigDecimal.ZERO)
                         .subtract(renfoulement.getRenfoulementCollectedForInscription())
                         .max(BigDecimal.ZERO);
 

@@ -32,4 +32,6 @@ public interface AuthUserRepository extends JpaRepository<AuthUser, Long> {
 
     Optional<AuthUser> findByUserRefId(Long id);
 
+    List<AuthUser> findAllByUserRefId(Long userRefId);
+
 }
